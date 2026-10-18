@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageEnhance, ImageOps, ImageTk, ImageDraw, ImageFont
+from PIL import Image, ImageEnhance, ImageOps, ImageTk, ImageDraw, ImageFont, ImageFilter
 
 BASE = Path(__file__).resolve().parent
 DRIVER = BASE / 'driver' / 'print_photo.py'
@@ -45,6 +45,11 @@ class Photo:
     pan_y: float = 0.0
     font_name: str = 'Standard'
     date_from_exif: bool = False
+    exposure: float = 0.0
+    highlights: float = 0.0
+    shadows: float = 0.0
+    warmth: float = 0.0
+    sharpness: float = 0.0
     def __post_init__(self):
         self.name = self.path.name
 
@@ -92,12 +97,15 @@ def choose_font(name, size):
 def apply_zoom_pan(im, target_size, fit_mode, zoom, pan_x, pan_y):
     """Crop around normalized center; drag positive x shows content shifted right."""
     rw, rh = target_size
-    if fit_mode != 'Füllen (Beschnitt)' and zoom <= 1.0001:
+    if fit_mode != 'Füllen (Beschnitt)' and zoom <= 1.0001 and not (pan_x or pan_y):
         return ImageOps.contain(im, target_size, method=Image.Resampling.LANCZOS)
     # Always fill target and then zoom using a crop of the *source*.
     w,h = im.size
     base_scale = max(rw / w, rh / h)
+    # Allow dragging at zoom=1, even for photos that perfectly match target aspect.
+    # A non-zero pan grants a small virtual overscan to create movable content.
     z = max(1.0, min(8.0, float(zoom)))
+    if z == 1.0 and (pan_x or pan_y): z = 1.08
     crop_w = min(w, rw / (base_scale*z))
     crop_h = min(h, rh / (base_scale*z))
     # pan coordinates in [-1,1], where +1 slides image right (shows left edge).
@@ -105,6 +113,33 @@ def apply_zoom_pan(im, target_size, fit_mode, zoom, pan_x, pan_y):
     top = (h-crop_h) * (1.0 - max(-1,min(1,pan_y))) / 2
     cropped=im.crop((int(round(left)),int(round(top)),int(round(left+crop_w)),int(round(top+crop_h))))
     return cropped.resize((rw,rh),Image.Resampling.LANCZOS)
+
+def apply_advanced(im, item):
+    """Lightroom-inspired approximate local adjustments; no proprietary Adobe processing."""
+    exposure = max(-2.0,min(2.0,float(item.exposure)))
+    if exposure: im = ImageEnhance.Brightness(im).enhance(2.0 ** exposure)
+    hi=max(-1.0,min(1.0,float(item.highlights)))
+    sh=max(-1.0,min(1.0,float(item.shadows)))
+    if hi or sh:
+        # grayscale masks with smooth transitions; exposure-like selective lift/recovery
+        lum=im.convert('L')
+        lm=lum.point(lambda v: int((v/255.0)**2*255))
+        sm=lum.point(lambda v: int(((255-v)/255.0)**2*255))
+        if hi:
+            target=ImageEnhance.Brightness(im).enhance(max(0.15,1+0.8*hi))
+            im=Image.composite(target, im, lm)
+        if sh:
+            target=ImageEnhance.Brightness(im).enhance(max(0.15,1+0.9*sh))
+            im=Image.composite(target, im, sm)
+    warmth=max(-1.0,min(1.0,float(item.warmth)))
+    if warmth:
+        r,g,b=im.split()
+        r=r.point(lambda v: min(255,max(0,round(v*(1+0.17*warmth)))))
+        b=b.point(lambda v: min(255,max(0,round(v*(1-0.17*warmth)))))
+        im=Image.merge('RGB',(r,g,b))
+    sharp=max(0.0,min(2.0,float(item.sharpness)))
+    if sharp: im=ImageEnhance.Sharpness(im).enhance(1+1.5*sharp)
+    return im
 
 def make_icon():
     """Original vector-like camera pictogram, no bundled photographs or binaries."""
@@ -120,7 +155,7 @@ def project_payload(items, project_path, port='COM5'):
     base=Path(project_path).resolve().parent
     data=[]
     for it in items:
-        d={key:getattr(it,key) for key in ('uid','copies','rotate','fit','brightness','contrast','saturation','layout','caption','border','print_rotate','enabled','zoom','pan_x','pan_y','font_name','date_from_exif')}
+        d={key:getattr(it,key) for key in ('uid','copies','rotate','fit','brightness','contrast','saturation','layout','caption','border','print_rotate','enabled','zoom','pan_x','pan_y','font_name','date_from_exif','exposure','highlights','shadows','warmth','sharpness')}
         try:d['path']=str(it.path.resolve().relative_to(base))
         except ValueError:d['path']=str(it.path.resolve())
         data.append(d)
@@ -156,6 +191,7 @@ def prepare_image(item, for_print=False):
                         (item.saturation, ImageEnhance.Color)):
         if factor != 1:
             im = cls(im).enhance(factor)
+    im = apply_advanced(im, item)
 
     canvas = Image.new('RGB', SIZE, 'white')
     edge = max(0, min(110, int(item.border)))
@@ -206,7 +242,7 @@ def prepare_image(item, for_print=False):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.3')
+        root.title('KODAK P210R Studio · 1.4')
         self.icon_image = ImageTk.PhotoImage(make_icon())
         root.iconphoto(True, self.icon_image)
         root.geometry('1280x880')
@@ -246,6 +282,15 @@ class App:
         top = ttk.Frame(outer); top.pack(fill='x', pady=(0,10))
         ttk.Label(top, text='✦ KODAK P210R Studio', font=('Segoe UI',22,'bold')).pack(side='left')
         ttk.Label(top, text='  · Bluetooth-Fotodruck & Stapelverarbeitung', foreground='#666').pack(side='left')
+        help_btn=ttk.Menubutton(top,text='Hilfe & Links  ▾')
+        help_btn.pack(side='right',padx=(8,0))
+        links=tk.Menu(help_btn,tearoff=0)
+        links.add_command(label='KODAK – Herstellerseite ↗',command=lambda:webbrowser.open('https://www.kodakphotoprinter.com/'))
+        links.add_command(label='GitHub – Quellcode ↗',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak'))
+        links.add_command(label='GitHub – Anleitung ↗',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak#installation-und-erster-druck'))
+        links.add_separator()
+        links.add_command(label='Über Studio 1.4',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.4\nUnabhängiges Open-Source-Entwicklungsprojekt\nDrucktreiber: stabile Version 2.3'))
+        help_btn['menu']=links
         ttk.Button(top, text='Bilder hinzufügen', command=self.add_files).pack(side='right', padx=3)
         ttk.Button(top, text='Projekt öffnen', command=self.open_project).pack(side='right', padx=3)
         ttk.Button(top, text='Projekt speichern', command=self.save_project).pack(side='right', padx=3)
@@ -279,7 +324,7 @@ class App:
         self.preview.bind('<ButtonPress-1>',self._drag_begin)
         self.preview.bind('<B1-Motion>',self._drag_move)
         self.preview.bind('<ButtonRelease-1>',lambda e:setattr(self,'drag_start',None))
-        self.tip_label=ttk.Label(right,text='◀  Abreißstreifen links beim Auswurf · nicht Teil des Druckbilds',foreground='#566783')
+        self.tip_label=ttk.Label(right,text='▼  Abreißstreifen: kurze Papierseite · nicht Teil des Druckbilds',foreground='#566783')
         self.tip_label.pack(anchor='w',pady=(0,4))
         ttk.Label(right,text='Mausrad: Zoom  ·  Linke Maustaste ziehen: Bild verschieben',foreground='#566783').pack(anchor='w')
         edit = ttk.LabelFrame(right,text='Bild & Drucklayout',padding=10); edit.pack(fill='x')
@@ -303,7 +348,6 @@ class App:
         fonts.bind('<<ComboboxSelected>>',lambda _:self._change('font_name',self.font_var.get()))
         self.exif_var=tk.BooleanVar(value=False)
         ttk.Checkbutton(fontrow,text='EXIF-Datum',variable=self.exif_var,command=lambda:self._change('date_from_exif',self.exif_var.get())).pack(side='left',padx=(10,0))
-        ttk.Button(fontrow,text='KODAK ↗',command=lambda:webbrowser.open('https://www.kodakphotoprinter.com/')).pack(side='left',padx=(8,0))
         borderrow=ttk.Frame(edit);borderrow.pack(fill='x',pady=(0,7))
         ttk.Label(borderrow,text='Weißer Rand:').pack(side='left',padx=(0,8))
         self.border_var=tk.IntVar(value=22)
@@ -325,7 +369,9 @@ class App:
         self.copies_var=tk.IntVar(value=1)
         ttk.Label(row2,text='Kopien:').pack(side='left'); self.copies_spin=ttk.Spinbox(row2,from_=1,to=99,textvariable=self.copies_var,width=5,command=self._set_copies)
         self.copies_spin.pack(side='left',padx=7); self.copies_spin.bind('<FocusOut>',lambda _:self._set_copies());self.copies_spin.bind('<Return>',lambda _:self._set_copies())
-        ttk.Button(row2,text='Bearbeitung zurücksetzen',command=self.reset_edits).pack(side='right')
+        ttk.Button(row2,text='Alle Einstellungen zurücksetzen',command=self.reset_edits).pack(side='right')
+        ttk.Button(row2,text='Bild zentrieren',command=self.center_crop).pack(side='right',padx=5)
+        ttk.Button(row2,text='Weitere Bearbeitung…',command=self.advanced_editor).pack(side='right',padx=5)
         self.sliders={}
         for label,attr in [('Helligkeit','brightness'),('Kontrast','contrast'),('Sättigung','saturation')]:
             r=ttk.Frame(edit);r.pack(fill='x',pady=3)
@@ -338,10 +384,12 @@ class App:
         bottom=ttk.LabelFrame(outer,text='Druck',padding=10);bottom.pack(fill='x',pady=(12,0))
         ttk.Label(bottom,text='Bluetooth-COM-Port:').pack(side='left')
         self.port=tk.StringVar(value='COM5');ttk.Entry(bottom,textvariable=self.port,width=9).pack(side='left',padx=(5,12))
-        self.poll_var=tk.BooleanVar(value=False)
-        ttk.Checkbutton(bottom,text='Statusabfragen (optional)',variable=self.poll_var).pack(side='left',padx=8)
+        self.poll_var=tk.BooleanVar(value=True)
+        ttk.Checkbutton(bottom,text='Druckphasen live anzeigen (Statusabfragen)',variable=self.poll_var).pack(side='left',padx=8)
         self.status=tk.StringVar(value='Bereit · Keine Fotos')
+        self.phase=tk.StringVar(value='Druckphase: —')
         ttk.Label(bottom,textvariable=self.status).pack(side='left',padx=10)
+        ttk.Label(bottom,textvariable=self.phase,foreground='#345db2').pack(side='left',padx=10)
         self.stop_btn=ttk.Button(bottom,text='Nach aktuellem Foto stoppen',command=self.stop,state='disabled');self.stop_btn.pack(side='right',padx=4)
         self.start_btn=ttk.Button(bottom,text='Stapel drucken',style='Primary.TButton',command=self.start);self.start_btn.pack(side='right',padx=4)
         ttk.Button(bottom,text='Vorschau-JPEG speichern',command=self.export).pack(side='right',padx=4)
@@ -388,7 +436,6 @@ class App:
         if not it:return
         sign=direction if direction is not None else (1 if event.delta>0 else -1)
         it.zoom=max(1.0,min(8.0,it.zoom*(1.12 if sign>0 else 1/1.12)))
-        if it.zoom==1:it.pan_x=it.pan_y=0.0
         self._schedule_preview()
 
     def _drag_begin(self,event):
@@ -401,10 +448,10 @@ class App:
         x,y=self.drag_start;self.drag_start=(event.x,event.y)
         if not self.preview_rect:return
         _,_,w,h=self.preview_rect
-        if it.zoom>1:
-            it.pan_x=max(-1,min(1,it.pan_x+2*(event.x-x)/max(1,w)/(1-1/it.zoom)))
-            it.pan_y=max(-1,min(1,it.pan_y+2*(event.y-y)/max(1,h)/(1-1/it.zoom)))
-            self._schedule_preview()
+        effective_zoom=max(1.08,it.zoom)
+        it.pan_x=max(-1,min(1,it.pan_x+2*(event.x-x)/max(1,w)/(1-1/effective_zoom)))
+        it.pan_y=max(-1,min(1,it.pan_y+2*(event.y-y)/max(1,h)/(1-1/effective_zoom)))
+        self._schedule_preview()
 
     def _current(self):
         return next((x for x in self.items if x.uid==self.selected),None)
@@ -446,11 +493,81 @@ class App:
     def reset_edits(self):
         if self.running:return
         item=self._current()
-        if item:
-            item.rotate=0;item.fit='Füllen (Beschnitt)';item.brightness=item.contrast=item.saturation=1
-            item.layout='Foto mit weißem Rand';item.caption='';item.border=22;item.print_rotate=False
-            item.zoom=1.0;item.pan_x=item.pan_y=0.0;item.font_name='Standard';item.date_from_exif=False
-            self._select()
+        if not item:return
+        if not messagebox.askyesno('Zurücksetzen', 'Alle Einstellungen des ausgewählten Fotos zurücksetzen (inklusive Kopienzahl, Druckhaken und Expertenkorrekturen)?'):
+            return
+        defaults=Photo(item.path)
+        for name in Photo.__dataclass_fields__:
+            if name not in ('path','uid','name'):
+                setattr(item,name,getattr(defaults,name))
+        self.tree.set(item.uid,'copies',item.copies)
+        self.tree.set(item.uid,'enabled','☑' if item.enabled else '☐')
+        self._select()
+
+    def center_crop(self):
+        if self.running:return
+        it=self._current()
+        if it:
+            it.pan_x=it.pan_y=0.0
+            self._schedule_preview()
+
+    def advanced_editor(self):
+        if self.running:return
+        item=self._current()
+        if item is None:
+            messagebox.showinfo('Weitere Bearbeitung','Bitte ein Bild auswählen.');return
+        dialog=tk.Toplevel(self.root)
+        dialog.title('Weitere Bearbeitung · Studio 1.4')
+        dialog.geometry('850x690');dialog.minsize(650,540)
+        dialog.transient(self.root)
+        dialog.configure(bg=BG)
+        before=copy.copy(item)
+        before.exposure=before.highlights=before.shadows=before.warmth=before.sharpness=0.0
+        layout=ttk.Frame(dialog,padding=16);layout.pack(fill='both',expand=True)
+        ttk.Label(layout,text='Weitere Bearbeitung',font=('Segoe UI',18,'bold')).pack(anchor='w')
+        ttk.Label(layout,text='Licht · Details · Farbtemperatur – Änderungen werden direkt im Foto übernommen.',foreground='#58657a').pack(anchor='w',pady=(2,9))
+        sw=tk.Canvas(layout,bg='#202b3d',highlightthickness=0,height=320)
+        sw.pack(fill='both',expand=True,pady=(0,10))
+        show_before=tk.BooleanVar(value=False)
+        cache={'photo':None,'after':None}
+        def show(*_):
+            try:
+                image=prepare_image(before if show_before.get() else item)
+                w=max(200,sw.winfo_width()-14);h=max(180,sw.winfo_height()-14)
+                image.thumbnail((w,h),Image.Resampling.LANCZOS)
+                cache['photo']=ImageTk.PhotoImage(image)
+                sw.delete('all');sw.create_image(sw.winfo_width()//2,sw.winfo_height()//2,image=cache['photo'])
+            except Exception as exc:
+                sw.delete('all');sw.create_text(180,80,text=str(exc),fill='white')
+        sw.bind('<Configure>',show)
+        ttk.Checkbutton(layout,text='Vorher anzeigen (zum Vergleichen)',variable=show_before,command=show).pack(anchor='w',pady=(0,8))
+        fields=[('Belichtung','exposure',-2,2),('Lichter','highlights',-1,1),('Tiefen','shadows',-1,1),('Temperatur','warmth',-1,1),('Schärfe','sharpness',0,2)]
+        controls=ttk.Frame(layout);controls.pack(fill='x')
+        vars={}
+        for index,(label,key,lo,hi) in enumerate(fields):
+            line=ttk.Frame(controls);line.pack(fill='x',pady=3)
+            ttk.Label(line,text=label,width=15).pack(side='left')
+            var=tk.DoubleVar(value=getattr(item,key));vars[key]=var
+            value_lbl=ttk.Label(line,text=f'{var.get():+.2f}',width=8)
+            def on_slide(value,k=key,lbl=value_lbl):
+                setattr(item,k,round(float(value),3));lbl.configure(text=f'{float(value):+.2f}')
+                if not show_before.get():show()
+                self._schedule_preview()
+            ttk.Scale(line,from_=lo,to=hi,variable=var,command=on_slide).pack(side='left',fill='x',expand=True,padx=9)
+            value_lbl.pack(side='left')
+        actions=ttk.Frame(layout);actions.pack(fill='x',pady=(12,0))
+        def defaults():
+            for key,var in vars.items():
+                var.set(0.0);setattr(item,key,0.0)
+            show();self._schedule_preview()
+        def cancel():
+            for key in vars:setattr(item,key,getattr(before,key))
+            self._schedule_preview();dialog.destroy()
+        ttk.Button(actions,text='Korrekturen zurücksetzen',command=defaults).pack(side='left')
+        ttk.Button(actions,text='Abbrechen',command=cancel).pack(side='right',padx=4)
+        ttk.Button(actions,text='Übernehmen',style='Primary.TButton',command=dialog.destroy).pack(side='right',padx=4)
+        dialog.protocol('WM_DELETE_WINDOW',cancel)
+        dialog.after(80,show)
 
     def _schedule_preview(self):
         if self.refresh_after:self.root.after_cancel(self.refresh_after)
@@ -470,7 +587,9 @@ class App:
             self.preview.create_rectangle(cx-im.width//2-8,cy-im.height//2-8,cx+im.width//2+8,cy+im.height//2+8,fill='#152035',outline='')
             self.preview.create_image(cx,cy,image=self.preview_photo)
             self.preview_rect=(cx-im.width//2,cy-im.height//2,im.width,im.height)
-            self.preview.create_line(cx-im.width//2-17,cy-im.height//2,cx-im.width//2-17,cy+im.height//2,fill='#f4c271',width=3,dash=(5,4))
+            # Tear-off strip always sits on the short paper edge. For vertical
+            # 640x1024 canvas, the output-side marker is therefore below.
+            self.preview.create_line(cx-im.width//2,cy+im.height//2+13,cx+im.width//2,cy+im.height//2+13,fill='#f4c271',width=3,dash=(5,4))
         except Exception as ex:self._log(f'Vorschaufehler: {ex}')
 
     def move(self,direction):
@@ -548,6 +667,7 @@ class App:
         self.running=True;self.cancel_flag.clear()
         self.start_btn.configure(state='disabled');self.stop_btn.configure(state='normal')
         self.status.set('Druck läuft …')
+        self.phase.set('Druckphase: Übertragung / Vorbereitung')
         self.progress.start(12)
         threading.Thread(target=self._worker,args=(snapshot,port,self.poll_var.get()),daemon=True).start()
 
@@ -571,13 +691,31 @@ class App:
                 if poll:args.append('--poll')
                 self.ui_messages.put(('log',f'{index}/{len(jobs)} → {item.name}, Kopie {copy_num}/{item.copies}'))
                 # The v2.3 script remains an external, unmodified subprocess.
-                result=subprocess.run(args,cwd=str(BASE),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',timeout=300)
+                # Line-buffered driver output makes observed print phases visible in real time.
+                # No serial/Bluetooth frame or transfer behavior is modified.
+                args.append('--emit-phases')
+                output_lines=[]
+                with subprocess.Popen(args,cwd=str(BASE),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                                      text=True,encoding='utf-8',errors='replace',bufsize=1) as process:
+                    began=time.monotonic()
+                    for line in process.stdout:
+                        output_lines.append(line)
+                        if line.startswith('P210R_PHASE '):
+                            parts=line.strip().split(' ',2)
+                            if len(parts)==3:
+                                self.ui_messages.put(('phase',parts[2]))
+                                self.ui_messages.put(('tree',(item.uid,parts[2])))
+                        if time.monotonic()-began>300:
+                            process.kill()
+                            raise TimeoutError('Druckauftrag nach 300 Sekunden abgebrochen')
+                    code=process.wait(timeout=5)
+                result_stdout=''.join(output_lines)
                 try:data=json.loads(report.read_text(encoding='utf-8'))
                 except Exception:data={}
                 error=data.get('error')
-                if result.returncode!=0 or error or data.get('result')=='error':
+                if code!=0 or error or data.get('result')=='error':
                     failed+=1;self.ui_messages.put(('tree',(item.uid,'Fehler')))
-                    self.ui_messages.put(('log',f'Druckfehler: {error or result.stdout[-800:]}'))
+                    self.ui_messages.put(('log',f'Druckfehler: {error or result_stdout[-800:]}'))
                     self.cancel_flag.set()  # don't continue batch after protocol failure
                 else:
                     successful+=1
@@ -597,6 +735,7 @@ class App:
                 action,data=self.ui_messages.get_nowait()
                 if action=='log':self._log(data)
                 elif action=='status':self.status.set(data)
+                elif action=='phase':self.phase.set('Druckphase: '+data)
                 elif action=='tree':
                     uid,state=data
                     if self.tree.exists(uid):self.tree.set(uid,'status',state)
