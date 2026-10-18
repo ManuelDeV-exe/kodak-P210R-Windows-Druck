@@ -21,6 +21,19 @@ class LayoutTest(unittest.TestCase):
                 rotated=prepare_image(item,for_print=True)
                 expected=im if layout.startswith('Polaroid') else im.rotate(180)
                 self.assertEqual(rotated.tobytes(),expected.tobytes())
+    def test_16_polaroid_uses_narrow_side_borders(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'fixture.jpg'
+            Image.new('RGB',(800,1100),'#123456').save(p)
+            for border in (0,22,30,90):
+                im=prepare_image(Photo(p,layout='Polaroid 1:1,6',border=border))
+                # White paper edge remains; photo starts within 12–35 pixels.
+                self.assertEqual(im.getpixel((0,200)),(255,255,255))
+                self.assertTrue(all(abs(a-b)<=3 for a,b in zip(im.getpixel((40,200)),(18,52,86))))
+                self.assertTrue(all(abs(a-b)<=3 for a,b in zip(im.getpixel((600,200)),(18,52,86))))
+                # Caption area remains white below the photograph.
+                self.assertEqual(im.getpixel((320,940)),(255,255,255))
+
     def test_white_polaroid_caption_space(self):
         with tempfile.TemporaryDirectory() as temp:
             p=Path(temp)/'fixture.jpg'
