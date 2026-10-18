@@ -1,31 +1,46 @@
-# KODAK P210R Studio 1.6
+# KODAK P210R Studio 1.7
 
-Eine lokale Windows-App zum Bearbeiten und Drucken von Fotos über den Bluetooth-COM-Port des KODAK P210R. Unabhängiges, mit KI-Unterstützung entwickeltes Hobbyprojekt.
+Eine Windows-Anwendung für Bildbearbeitung, Polaroid-Layouts und Bluetooth-Fotodruck mit dem KODAK Mini 2 Retro P210R. Unabhängiges Hobbyprojekt, mit KI-Unterstützung (vibe-coded) entwickelt.
 
-## Neu in Version 1.6
+## Neu in 1.7
 
-- Modernere, blaue Oberfläche mit drei **getrennten Seiten**: Druckwarteschlange, Fotogestaltung und Druckprotokoll. Keine aufklappbaren Akkordeons.
-- Warteschlange und Fotogestaltung sind nicht mehr gleichzeitig im Hauptfenster; per Navigation wechseln, Doppelklick auf ein Foto öffnet den Editor.
-- Bearbeitung in einem eigenen Arbeitsbereich mit großer Vorschau und **scrollbaren Einstellungen**; bei schmaleren Fenstern wandern die Einstellungen unter das Bild.
-- Druckprotokoll öffnet sich beim Druckstart automatisch; das separate Druckfenster zeigt das aktuelle Foto.
-- **Farbanimation von unten nach oben**, passend zu tatsächlich erkannten Gelb-, Magenta-, Cyan- und Schutzschicht-Statusmeldungen. Die Animation ist illustrativ, keine gemessene Druckgeschwindigkeit.
-- Feinregler, Projektdateien, Polaroid-Layouts, EXIF-Datum und weitere Bearbeitung aus den vorherigen Versionen bleiben erhalten.
+Das animierte Druckfenster bekommt jetzt echte Ereignisse vom Python-Drucktreiber:
 
-## Start
+- **Bildübertragung:** Der Drucktreiber gibt die bestätigte übertragene Bytezahl aus. Die Anwendung zeigt den daraus berechneten Übertragungsfortschritt in Prozent.
+- **Druckphasen:** Sobald ein Statuspaket `04 03 01 01 ...` vom Drucker eintrifft, wechselt das Fenster zur gemeldeten Phase: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` fertig.
+- **Animation:** Während einer Farbphase wandert die farbige Zone **von unten nach oben**. Die Bewegung ist *nur eine Visualisierung*; es gibt im analysierten Protokoll keine gesicherte Prozentangabe innerhalb einer Farbe. Die Animation stoppt bei maximal 94 % und beginnt erst beim nächsten echten Statuscode neu.
+- **Diagnose:** Wenn über den beobachteten Zeitraum kein Farbstatus kommt, meldet die Anwendung das ausdrücklich. Der Druckbericht enthält die empfangenen Rohpakete.
 
-1. Python 3.10 oder neuer auf Windows installieren.
-2. Drucker koppeln und seriellen COM-Port nachsehen (in unserem Test COM5).
-3. `STARTEN.bat` doppelklicken; der erste Start installiert Pillow und pyserial.
-4. Bilder in **Druckwarteschlange** hinzufügen. Per Doppelklick oder Navigation zu **Fotogestaltung** wechseln.
-5. Für einen Ausdruck auf **Stapel drucken** klicken. Dabei wird das **Druckprotokoll** sichtbar; zusätzlich öffnet sich das Druckfenster.
+Die Befehle zur Bildübertragung und der bestätigte V2.3-Druckablauf bleiben unverändert. Die zusätzliche Konsolenausgabe ist ausschließlich für die Benutzeroberfläche gedacht.
 
-## Hinweise
+## Anwendung starten
 
-- Die bewährten Druckdatenpakete und die Bluetooth-Übertragung bleiben auf der Version 2.3 basierend.
-- Der Drucker meldet unter anderem: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutz, `02` unbekannt, `03` Abschluss.
-- Der tatsächliche Statuswechsel bestimmt die Farbe. Die Geschwindigkeit des farbigen Balkens ist **keine** Hardwaremessung.
-- Die Bildverarbeitung erstellt 640 × 1024 Pixel. Der Abreißstreifen sitzt an der kurzen Papierseite.
-- Eigene Fotos/Projekte/Logs bleiben lokal; das Repository/ZIP enthält keine Beispielbilder.
-- Die neue Oberfläche muss noch auf Windows mit dem Drucker getestet werden.
+1. ZIP vollständig entpacken und `STARTEN.bat` doppelklicken.
+2. Drucker koppeln und den seriellen Bluetooth-Port einstellen (beim bisherigen Test COM5).
+3. Foto(s) hinzufügen, Gestaltung bearbeiten und drucken.
+4. Das Druckfenster und das automatisch geöffnete Protokoll beobachten.
 
-**Repository:** https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck
+Für einen direkten Diagnoselauf auf COM5 (mit selbstgewählter lokaler Bilddatei) geht auch:
+
+```cmd
+py driver\print_photo.py --send --port COM5 --image "C:\Pfad\zum\Foto.jpg" --poll --emit-phases
+```
+
+Die JSON-Berichte liegen bei Studiostapeln im Unterordner `output/` des jeweiligen Auftrags. Wenn der Drucker arbeitet, aber die Farben nicht gemeldet werden, ist genau dieser Bericht für die nächste Analyse hilfreich.
+
+## Was die Fortschrittswerte aussagen
+
+- Der Prozentwert während der **Übertragung** bezieht sich auf gesendete/abgedeckte JPEG-Bytes, nicht auf den mechanischen Druck.
+- Die **Farbphase** beruht auf einer tatsächlichen Antwort des Druckers.
+- Der Balken *innerhalb* einer Farbphase ist weiterhin nicht auf einen Encoder oder eine reale Prozentmeldung synchronisiert. Eine echte Feinmessung ist mit dem derzeit bekannten Protokoll nicht möglich.
+- `02` bleibt absichtlich ohne behauptete Bedeutung.
+
+23 Offline-Tests bestanden. Neue Statusanzeige noch nicht am echten Drucker bestätigt.
+
+Private Fotos und Projektdateien werden nicht mitgeliefert. Die Software ist keine offizielle KODAK-Anwendung.
+
+Projekt: https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck
+
+## Polaroid 1:1,6 – schmale Seitenränder
+
+Bei diesem Layout füllt das Foto die Breite fast vollständig aus (ca. 12–35 Pixel Rand je Seite). Der weiße Bereich für die Beschriftung bleibt unten erhalten. **1:1,6 bezeichnet dabei das Gesamtformat des 640 × 1024-Pixel-Ausdrucks**, nicht das Verhältnis der inneren Fotofläche. Die Druckroutine selbst ist unverändert.
