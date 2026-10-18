@@ -47,6 +47,12 @@ Die Fotogestaltung hat eine größere Vorschau, zwei Regler zum Feinpositioniere
 
 Sobald du den Druck startest, öffnet sich die Protokollansicht und zusätzlich ein eigenes Druckfenster. Dort läuft die animierte Farbzone für Gelb, Magenta, Cyan und Schutzschicht **von unten nach oben** über das Foto. Welche Farbe aktiv ist, richtet sich nach den empfangenen Druckerstatusmeldungen. Wie schnell sich die Animation bewegt, ist dagegen nur eine Veranschaulichung und keine gemessene Druckgeschwindigkeit.
 
+## Neu in Studio 1.7
+
+Bei der Bildübertragung zeigt das Studio jetzt die tatsächlich bestätigten JPEG-Datenmengen an. Während des Drucks nutzt es die vom Gerät gemeldeten Farbphasen für das Animationsfenster. Die Bewegung innerhalb einer Phase bleibt eine Visualisierung, kein exakt gemessener mechanischer Fortschritt.
+
+**Polaroid 1:1,6 wurde ebenfalls angepasst:** Das Foto reicht nun beinahe bis an die Papierkanten (jeweils etwa 12–35 Pixel weißer Rand links und rechts), während unten der breite Beschriftungsstreifen erhalten bleibt. Das Verhältnis **1:1,6** bezieht sich hierbei auf das gesamte Papierformat von 640 × 1024 Pixeln, nicht auf den inneren Bildausschnitt.
+
 ## Installation
 
 Du brauchst **Windows**, **Python 3.10 oder neuer** und einen per Bluetooth gekoppelten **KODAK Mini 2 Retro P210R**.
