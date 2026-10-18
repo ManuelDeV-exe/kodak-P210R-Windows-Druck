@@ -4,62 +4,52 @@
 
 # KODAK P210R Studio
 
-**Fotos am Windows-PC bearbeiten, gestalten und ohne die offizielle Smartphone-App per Bluetooth auf dem KODAK Mini 2 Retro P210R drucken.**
+**Ein kleines Fotostudio für Windows – Bilder bearbeiten, Polaroids gestalten und direkt über Bluetooth auf dem KODAK Mini 2 Retro P210R ausdrucken.**
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-Desktop-0078D4?logo=windows&logoColor=white)
-![Studio](https://img.shields.io/badge/Studio-1.4-6e7be8)
-![Drucktreiber](https://img.shields.io/badge/Bluetooth--Druck-V2.3%20erfolgreich-2b9348)
+[Zum Studio](studio/) · [Installation](#installation) · [Drucklayouts](#drucklayouts)
 
 </div>
 
-## Was ist das?
+## Worum geht's?
 
-**KODAK P210R Studio** ist eine eigenständige Python-Desktop-Anwendung für den Fotodrucker **KODAK Mini 2 Retro P210R**. Sie bietet eine Bildvorschau, einfache Bildbearbeitung, verschiedene Rahmenlayouts und eine Druckwarteschlange für mehrere Fotos.
+Ich wollte Fotos vom PC aus auf meinem KODAK Mini 2 Retro drucken, ohne dafür jedes Mal die Smartphone-App zu benutzen. Daraus ist dieses Projekt entstanden: eine Windows-Anwendung, in der man Bilder auswählen, etwas bearbeiten und anschließend einzeln oder als Stapel drucken kann.
 
-Die eigentliche Bluetooth-Druckroutine wurde aus einer eigenen Protokollaufzeichnung rekonstruiert. **Ein vollständiger Ausdruck mit der Python-Druckroutine V2.3 wurde auf einem P210R erfolgreich getestet.** Die grafische Anwendung und insbesondere der Stapeldruck sind noch am Gerät zu erproben.
+Das Ganze ist **vibe-coded**, also mit KI-Unterstützung entwickelt. Die Kommunikation mit dem Drucker basiert auf einer eigenen Untersuchung des Bluetooth-Protokolls. Der erste vollständige Ausdruck über Python hat mit dem Treiber V2.3 funktioniert.
+
+Das Projekt wächst seitdem Stück für Stück. Nicht jede neue Funktion wurde bereits auf jeder Windows-Konfiguration oder mit längeren Druckstapeln ausprobiert.
+
+## Was das Studio kann
+
+- **Fotos auswählen:** Einzelne Bilder oder einen ganzen Ordner laden.
+- **Bilder bearbeiten:** Drehen, zuschneiden, zoomen, verschieben und Farben anpassen.
+- **Mehr Kontrolle:** Über „Weitere Bearbeitung“ gibt es zusätzliche, Lightroom-inspirierte Regler.
+- **Eigene Drucklayouts:** Ohne Rand, mit weißem Rand oder im Polaroid-Stil.
+- **Polaroids beschriften:** Eigener Text, verschiedene Schriften oder das Aufnahmedatum aus den EXIF-Daten.
+- **Stapel drucken:** Reihenfolge festlegen, Bilder an- und abhaken sowie die Kopienzahl einstellen.
+- **Projekte sichern:** Warteschlangen und Einstellungen speichern und später wieder laden.
+- **Druckphasen ansehen:** Soweit vom Drucker gemeldet, zeigt das Studio die einzelnen Druckschritte an.
 
 ## Drucklayouts
 
-![Vorschau der drei Drucklayouts](docs/images/layouts.svg)
+![Rahmen und Polaroid-Layouts](docs/images/layouts.svg)
 
-| Layout | Beschreibung |
-| --- | --- |
-| **Ohne Rahmen** | Foto ohne zusätzlichen weißen Rahmen. |
-| **Weißer Rand** | Klassischer Druck mit einstellbarer Randbreite. |
-| **Polaroid 1:1,2** | Hochformatige Fotofläche mit weißem Platz für Text. |
-| **Polaroid 1:1,4** | Längere Fotofläche und zusätzlicher weißer Textbereich. |\n| **Polaroid 1:1,6** | Noch schmalere Fotofläche und mehr Platz für Text. |
+Es gibt einen klassischen **weißen Rahmen** und drei Polaroid-Varianten: **1:1,2**, **1:1,4** und **1:1,6**. Unten bleibt jeweils Platz für eine Beschriftung. Breite und Ausschnitt kannst du anpassen.
 
-Die Formate **1:1,2 und 1:1,4** beziehen sich auf das Verhältnis **Breite : Höhe der inneren Fotofläche**. Das physische Papierformat bleibt unverändert. Die Druckbilder werden auf **640 × 1024 Pixel** vorbereitet.
+Das Papierformat des Druckers ändert sich dabei nicht: Die Anwendung erstellt ein passendes Druckbild mit **640 × 1024 Pixeln**. Auch die Ausrichtung des abtrennbaren Papierstreifens wird in der Vorschau berücksichtigt.
 
-## Funktionen in Studio 1.4
+*Die Abbildungen sind Illustrationen, keine Screenshots der Anwendung.*
 
-- Bilder einzeln oder aus ganzen Ordnern importieren.
-- Bildvorschau mit unmittelbarer Anzeige der Bearbeitungen.
-- Helligkeit, Kontrast und Sättigung ändern.
-- Bilder drehen, einpassen oder passend zuschneiden.
-- Weißrand und beide Polaroid-Layouts auswählen.
-- Freie Bildunterschrift in den weißen Polaroid-Bereich schreiben.
-- Druckwarteschlange mit Reihenfolge und Kopienzahl.
-- Stapeldruck über Bluetooth-COM-Port.
-- Druckbild optional um 180° drehen.
-- Aktivitätsanzeige und lokale Druckprotokolle.
+## Installation
 
-**Hinweis zum Abreißstreifen:** Beim Papierauswurf sitzt der Streifen **links**. Die Vorschau markiert diese Seite; die Markierung wird nicht mitgedruckt.
+Du brauchst **Windows**, **Python 3.10 oder neuer** und einen per Bluetooth gekoppelten **KODAK Mini 2 Retro P210R**.
 
-Die animierte Anzeige zeigt **Aktivität**, keinen exakt gemessenen Druckfortschritt.
+1. Repository herunterladen oder klonen.
+2. Den Ordner `studio` öffnen.
+3. `STARTEN.bat` doppelklicken. Beim ersten Start werden die Python-Abhängigkeiten installiert.
+4. Den seriellen Bluetooth-COM-Port auswählen. Bei meinem Testgerät war das **COM5**; bei dir kann es ein anderer Port sein.
+5. Ein Foto laden, bearbeiten und einen Probedruck starten.
 
-## Installation und erster Druck
-
-1. Dieses Repository als ZIP herunterladen oder klonen.
-2. **Python 3.10 oder neuer** unter Windows installieren.
-3. Den KODAK P210R einschalten und über Bluetooth mit Windows koppeln.
-4. Den Ordner **`studio`** öffnen.
-5. **`STARTEN.bat`** doppelklicken. Beim ersten Start werden die erforderlichen Python-Pakete installiert.
-6. Den **ausgehenden seriellen Bluetooth-COM-Port** im Studio einstellen. Im ursprünglichen Testaufbau war dies **COM5**; auf anderen PCs kann er anders heißen.
-7. Foto hinzufügen, Layout auswählen und zunächst **einen einzelnen Probedruck** ausführen.
-
-Alternativ in der Windows-Eingabeaufforderung:
+Alternativ über die Eingabeaufforderung:
 
 ```bat
 cd studio
@@ -67,82 +57,43 @@ py -m pip install -r requirements.txt
 py app.py
 ```
 
-**Wichtig:** Die originale KODAK-App darf den Drucker während des Druckvorgangs nicht gleichzeitig verwenden. Beim ersten Stapeldruck die Ausgabe beaufsichtigen.
+**Tipp:** Erst mit einem Foto testen, bevor du eine größere Warteschlange losschickst. Die offizielle KODAK-App sollte währenddessen nicht mit dem Drucker verbunden sein.
 
-## So arbeitet das Studio
+## Wie funktioniert der Druck?
 
-![Ablauf vom Foto bis zum Ausdruck](docs/images/workflow.svg)
+![Vom Bild bis zum Drucker](docs/images/workflow.svg)
 
-1. **Import:** Das Studio lädt ein Foto oder eine ganze Bildsammlung in die Warteschlange.
-2. **Bearbeitung:** Für jedes Bild werden Layout, Beschnitt, Farbe und optional eine Beschriftung gewählt.
-3. **Rendering:** Die Anwendung rendert daraus lokal ein JPEG mit **640 × 1024 Pixeln**.
-4. **Druckauftrag:** Der unveränderte **V2.3-Treiber** in `studio/driver/print_photo.py` überträgt die Bilddaten über den Bluetooth-COM-Port.
-5. **Stapeldruck:** Weitere Bilder bzw. Kopien werden der Reihe nach gesendet.
+Das Studio bearbeitet das Foto lokal und erzeugt daraus die Druckdatei. Anschließend übernimmt der Python-Treiber die Übertragung über den seriellen Bluetooth-Port.
 
-Für die Bildbearbeitung und den Druck ist nach Installation der Abhängigkeiten keine Internetverbindung erforderlich.
+Der Drucker meldet dabei unterschiedliche Phasen. Nach den bisherigen Beobachtungen stehen sie für **Vorbereitung → Gelb → Magenta → Cyan → Schutzschicht → Fertig**. Diese Zuordnung stammt aus Tests mit dem Gerät, nicht aus einer offiziellen Protokolldokumentation.
 
-## Projektstruktur
+Die erfolgreiche Druckroutine aus V2.3 dient als Grundlage für das Studio. Änderungen an der Oberfläche und Bildbearbeitung sind davon möglichst getrennt.
+
+## Projektaufbau
 
 ```text
 kodak/
 ├── README.md
-├── docs/
-│   └── images/
-│       ├── hero.svg
-│       ├── layouts.svg
-│       └── workflow.svg
+├── docs/images/          # Illustrationen für diese Seite
 └── studio/
-    ├── app.py
-    ├── driver/
-    │   └── print_photo.py
-    ├── STARTEN.bat
+    ├── app.py            # Oberfläche und Bildbearbeitung
+    ├── driver/           # Bluetooth-Druckroutine
+    ├── tests/            # Offline-Tests
+    ├── STARTEN.bat       # Start unter Windows
     ├── requirements.txt
-    ├── .gitignore
-    ├── tests/
-    └── README.md
+    └── README.md         # Weitere technische Hinweise
 ```
 
-## Tests
+Weitere Details zur Bedienung findest du in der [Studio-README](studio/README.md).
 
-Die Offline-Tests können so gestartet werden:
+## Stand des Projekts
 
-```bat
-cd studio
-py -m unittest discover -s tests -v
-```
+Der **Einzeldruck per Bluetooth** funktioniert auf dem getesteten P210R. Auch Bildaufbereitung und einige Funktionen rund um die Warteschlange sind durch Offline-Tests abgedeckt. Die neueren Oberflächenfunktionen und größere Druckstapel werden noch weiter getestet.
 
-**Stand:** Der Bluetooth-Einzeldruck mit V2.3 ist erfolgreich erprobt; für alle neuen Layoutvarianten und lange Stapel steht der vollständige Hardwaretest noch aus.
+Wenn bei dir etwas nicht passt, sind besonders Angaben zur Studio-Version, zum Windows-COM-Port und zum Verhalten des Druckers hilfreich.
 
-## Neu in Studio 1.4
+## Datenschutz und Hinweis
 
-- **Mit der Maus zoomen und verschieben:** Mausrad in der Vorschau und Ziehen mit linker Maustaste. Der Bildausschnitt wird mitgedruckt.
-- **Eigenes App-Icon:** Kamerasymbol im Windows-Fenster.
-- **Schriftwahl für Polaroids:** Standard bleibt vorausgewählt; zusätzlich Segoe UI, Arial, Georgia, Times New Roman und Consolas.
-- **Bearbeitung zurücksetzen:** Fotoeinstellungen einschließlich Zoom, Layout, Beschriftung und Schriftauswahl zurücksetzen.
-- **Abhakbare Warteschlange:** Jedes Foto einzeln vom nächsten Stapeldruck ausschließen.
-- **Projektdateien:** Bildreihenfolge, Einstellungen, Kopien, Druckauswahl und COM-Port in `*.p210r.json` speichern und laden. Projekte enthalten **nur Verweise auf Bilddateien**, nicht die Bilder selbst.
-- **EXIF-Datum:** Aufnahmedatum automatisch als Polaroid-Beschriftung übernehmen; ohne Metadaten bleibt der manuelle Text.
-- **KODAK-Link:** Herstellerwebseite aus der Anwendung öffnen.
+Private Fotos gehören nicht in dieses Repository. Die hier verwendeten Grafiken sind eigens erstellte SVG-Illustrationen; das ursprüngliche Testfoto wurde **nicht** veröffentlicht. Projektdateien können lokale Dateipfade enthalten und sollten ebenfalls privat bleiben.
 
-**Neu in 1.3:** Bei Polaroid-Drucken wird das Foto für die tatsächliche Papierausgabe automatisch um 180° gedreht, während die Vorschau aufrecht bleibt. Bei Bedarf kann die Drehrichtung umgekehrt werden. Zusätzlich steht Polaroid 1:1,6 zur Verfügung. Die V2.3-Bluetooth-Druckroutine bleibt unverändert. Acht Offline-Tests wurden erfolgreich ausgeführt; die neue Oberfläche und längere Druckstapel sind noch am Gerät zu testen.
-
-## Studio 1.4: Weitere Bearbeitung und Live-Druckphasen
-
-- **Weitere Bearbeitung:** Lightroom-ähnlicher Dialog mit Belichtung, Lichtern, Tiefen, Farbtemperatur, Schärfe, Live-Vorschau und Vorher/Nachher.
-- **Abreißstreifen:** Vorschau markiert nun die kurze Papierseite (unten beim Hochformat) statt irrtümlich die linke lange Kante.
-- **Verschieben ohne Zoom:** Bildausschnitt mit der Maus verstellen; zusätzliche Schaltfläche zum Zentrieren.
-- **Alle Fotoeinstellungen zurücksetzen:** einschließlich Kopien und Druckauswahl.
-- **Hilfe & Links:** KODAK-Website und GitHub im Untermenü.
-- **Statusabfragen standardmäßig aktiv:** dekodierte tatsächliche Antworten: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` abgeschlossen. Zuordnung basiert auf Praxiserfahrungen, nicht offizieller Dokumentation. Es werden keine fiktiven Fortschrittswerte erzeugt.
-
-**10 Offline-Tests bestanden.** Die seriellen Druckdatenpakete der erfolgreichen V2.3-Übertragung wurden nicht verändert; ausschließlich die Ausgabe/Dekodierung von Statusmeldungen wurde ergänzt. Neue GUI-Funktionen sind noch vor Ort zu testen.
-
-## Datenschutz
-
-**In diesem Repository befinden sich keine privaten Test- oder Beispielfotos.** Die Grafiken dieser README sind **eigens erstellte SVG-Illustrationen**, keine persönlichen Fotos. Die `studio/.gitignore` schließt typische Bilddateien sowie lokale Druck- und Protokolldateien aus.
-
-## Hinweise
-
-Dies ist ein unabhängiges Community-/Entwicklungsprojekt und **keine offizielle Software von KODAK**. Druckprotokoll und Hardwareverhalten können je nach Firmware oder Bluetooth-Konfiguration abweichen.
-
-Weiterführende Hinweise: [Studio-Dokumentation](studio/README.md).
+Dies ist ein **unabhängiges Hobbyprojekt** und keine offizielle KODAK-Software.
