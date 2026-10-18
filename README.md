@@ -39,6 +39,14 @@ Das Papierformat des Druckers ändert sich dabei nicht: Die Anwendung erstellt e
 
 *Die Abbildungen sind Illustrationen, keine Screenshots der Anwendung.*
 
+## Neu in Studio 1.5
+
+Die Bildposition lässt sich jetzt nicht nur mit der Maus, sondern auch mit **zwei Feinreglern** für horizontal und vertikal einstellen. Die **−/+‑Tasten** ändern die Position jeweils um einen Prozentpunkt.
+
+Beim Drucken öffnet sich ein eigenes Fenster mit dem Foto. Passend zu den vom Drucker gemeldeten Phasen zieht eine **gelbe, magentafarbene, cyanfarbene oder helle Schutzschicht** als Animation von oben nach unten über die Vorschau. Das ist eine Visualisierung und **keine gemessene Druckgeschwindigkeit**.
+
+Die Oberfläche ist außerdem etwas übersichtlicher geworden: Warteschlange, Bildgestaltung und Druckausgabe sind klarer getrennt.
+
 ## Installation
 
 Du brauchst **Windows**, **Python 3.10 oder neuer** und einen per Bluetooth gekoppelten **KODAK Mini 2 Retro P210R**.
