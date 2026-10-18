@@ -31,3 +31,5 @@ venv/
 Thumbs.db
 # Projekte können private lokale Dateipfade enthalten
 *.p210r.json
+# Lokale Kalibrierung und Papier-/Geräteeinstellungen
+calibration.json
