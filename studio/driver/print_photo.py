@@ -158,6 +158,8 @@ def main():
                 unique_end = max(unique_end, offset+packet_size)
                 report['image_bytes_sent'] += packet_size
                 report['unique_bytes_covered'] = unique_end
+                if a.emit_phases:
+                    print(f'P210R_TRANSFER {unique_end} {len(jpeg)}',flush=True)
                 print(f'Segment {i+1}: offset={offset} length={packet_size} '
                       f'covered={unique_end}/{len(jpeg)}')
                 if unique_end >= len(jpeg):
@@ -227,6 +229,8 @@ def main():
                 if a.poll and time.monotonic() - last_poll >= 3:
                     send(POLL, 'status_poll')
                     last_poll = time.monotonic()
+            if a.emit_phases and not any(x.get('type') == 'printing_status' for x in report['post_transfer_observation']):
+                print('P210R_DIAGNOSTIC Kein_Farbstatus_empfangen', flush=True)
             report['unparsed_post_transfer_hex'] = bytes(buffer).hex()
             report['observed_seconds'] = a.observe_seconds
     except Exception as exc:
