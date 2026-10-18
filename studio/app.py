@@ -16,6 +16,8 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageEnhance, ImageOps, ImageTk, ImageDraw, ImageFont, ImageFilter
+from calibration import (load_calibration, save_calibration, calibration_pattern,
+                         calculate_offsets, apply_calibration, settings_path)
 
 BASE = Path(__file__).resolve().parent
 DRIVER = BASE / 'driver' / 'print_photo.py'
@@ -248,12 +250,12 @@ def prepare_image(item, for_print=False):
 
 
 PRINT_PHASES = {
-    'FF': ('Vorbereitung', '#8b9ab3', 0.0),
-    '05': ('Gelb', '#f4d348', 0.28),
-    '06': ('Magenta', '#df4da7', 0.25),
-    '00': ('Cyan', '#22bacc', 0.27),
-    '01': ('Schutzschicht', '#c8d7ed', 0.27),
-    '02': ('Ausgabe läuft', '#8b9ab3', 0.0),
+    'FF': ('Druckstart', '#8b9ab3', 0.0),
+    '05': ('Vorbereitung', '#8b9ab3', 0.0),
+    '06': ('Gelb', '#f4d348', 0.28),
+    '00': ('Magenta', '#df4da7', 0.25),
+    '01': ('Cyan', '#22bacc', 0.27),
+    '02': ('Schutzschicht', '#c8d7ed', 0.27),
     '03': ('Abgeschlossen', '#34a889', 0.0),
 }
 
@@ -299,7 +301,7 @@ class PrintPreviewWindow:
     def __init__(self, master):
         self.master=master
         self.win=tk.Toplevel(master)
-        self.win.title('Druck läuft · P210R Studio 1.7')
+        self.win.title('Druck läuft · P210R Studio 1.8')
         self.win.geometry('570x750')
         self.win.minsize(420,560)
         self.win.configure(bg='#152238')
@@ -386,7 +388,7 @@ class PrintPreviewWindow:
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.7')
+        root.title('KODAK P210R Studio · 1.8')
         self.icon_image = ImageTk.PhotoImage(make_icon())
         root.iconphoto(True, self.icon_image)
         root.geometry('1160x820')
@@ -402,6 +404,7 @@ class App:
         self.preview_rect = None
         self.project_path = None
         self.print_window = None
+        self.calibration = load_calibration()
         root.configure(bg=BG)
         self.anim_tick=0
         self._build()
@@ -444,7 +447,8 @@ class App:
         links.add_command(label='GitHub – Projekt',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck'))
         links.add_command(label='GitHub – Anleitung',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck#installation'))
         links.add_separator()
-        links.add_command(label='Über Studio 1.7',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.7\nUnabhängiges, KI-unterstütztes Hobbyprojekt\nBluetooth-Druckroutine auf Basis V2.3'))
+        links.add_command(label='Druckkalibrierung…',command=self.open_calibration)
+        links.add_command(label='Über Studio 1.8',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.8\nUnabhängiges, KI-unterstütztes Hobbyprojekt\nBluetooth-Druckroutine auf Basis V2.3'))
         help_btn['menu']=links
         nav=ttk.Frame(self.shell);nav.pack(fill='x',pady=(0,12))
         self.nav_buttons={}
@@ -898,6 +902,124 @@ class App:
         self.status.set('Bereit · Keine Fotos')
         self.project_path=None
 
+    def open_calibration(self):
+        """Print a centered reference square, then record measured paper margins."""
+        if self.running:
+            return messagebox.showinfo('Druck läuft','Kalibrierung erst nach Ende des Drucks starten.')
+        win=tk.Toplevel(self.root)
+        win.title('Druckkalibrierung · P210R Studio 1.8')
+        win.geometry('580x650');win.minsize(490,540)
+        win.transient(self.root)
+        win.configure(bg=BG)
+        main=ttk.Frame(win,padding=20);main.pack(fill='both',expand=True)
+        ttk.Label(main,text='Druckkalibrierung',font=('Segoe UI',21,'bold')).pack(anchor='w')
+        ttk.Label(main,text='1 · Testquadrat drucken  →  2 · Ränder messen  →  3 · Speichern',
+                  style='Subtitle.TLabel').pack(anchor='w',pady=(2,13))
+        ttk.Label(main,text='Messe am fertigen Foto nach dem Entfernen der Abreißstreifen.\n'
+                  'Alle vier Abstände vom Papierrand bis zum schwarzen Quadrat in mm.\n'
+                  'Die Korrektur verschiebt nur das Druckbild, nicht deine Bildvorschau.',
+                  justify='left').pack(anchor='w',pady=(0,12))
+        image=calibration_pattern()
+        thumb=image.copy();thumb.thumbnail((190,240))
+        thumbtk=ImageTk.PhotoImage(thumb)
+        image_label=tk.Label(main,image=thumbtk,bg=BG)
+        image_label.image=thumbtk
+        image_label.pack(anchor='center',pady=5)
+        row=ttk.Frame(main);row.pack(fill='x',pady=8)
+        ttk.Label(row,text='Papierbreite (mm)').grid(row=0,column=0,sticky='w')
+        ttk.Label(row,text='Papierhöhe (mm)').grid(row=0,column=2,sticky='w',padx=(18,0))
+        paper_w=tk.StringVar(value=str(self.calibration.get('paper_width_mm',54.0)))
+        paper_h=tk.StringVar(value=str(self.calibration.get('paper_height_mm',86.0)))
+        ttk.Entry(row,textvariable=paper_w,width=9).grid(row=0,column=1,padx=5)
+        ttk.Entry(row,textvariable=paper_h,width=9).grid(row=0,column=3,padx=5)
+        ttk.Label(main,text='Gemessene Abstände (mm)',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=(12,2))
+        fields=ttk.Frame(main);fields.pack(fill='x')
+        entries={}
+        for idx,key in enumerate(('links','rechts','oben','unten')):
+            ttk.Label(fields,text=key.capitalize()).grid(row=idx//2,column=(idx%2)*2,sticky='w',pady=5)
+            var=tk.StringVar();entries[key]=var
+            ttk.Entry(fields,textvariable=var,width=12).grid(row=idx//2,column=(idx%2)*2+1,padx=(6,25),pady=5)
+        result=tk.StringVar(value=f"Gespeichert: X {self.calibration.get('x_px',0):+d} px · Y {self.calibration.get('y_px',0):+d} px")
+        ttk.Label(main,textvariable=result,foreground='#345db2',wraplength=500).pack(anchor='w',pady=(8,8))
+        def values():
+            def parse(v):return float(v.strip().replace(',','.'))
+            pw,ph=parse(paper_w.get()),parse(paper_h.get())
+            mm={k:parse(v.get()) for k,v in entries.items()}
+            return calculate_offsets(mm['links'],mm['rechts'],mm['oben'],mm['unten'],pw,ph)
+        def calculate(save=False):
+            try:
+                config=values()
+                if save:
+                    save_calibration(config)
+                    self.calibration=config
+                    self._log(f"Druckkalibrierung gespeichert: X {config['x_px']:+d}px / Y {config['y_px']:+d}px")
+                result.set(f"{'Gespeichert' if save else 'Vorschlag'}: X {config['x_px']:+d} px · Y {config['y_px']:+d} px  "
+                           f"(X {config['x_mm']:+.2f} mm / Y {config['y_mm']:+.2f} mm)")
+            except (ValueError,KeyError) as exc:
+                messagebox.showerror('Ungültige Messung',str(exc),parent=win)
+        actions=ttk.Frame(main);actions.pack(fill='x',pady=(9,0))
+        ttk.Button(actions,text='Testquadrat drucken',style='Primary.TButton',command=lambda:self._print_calibration_pattern(win)).pack(fill='x',pady=(0,7))
+        row2=ttk.Frame(actions);row2.pack(fill='x')
+        ttk.Button(row2,text='Korrektur berechnen',command=calculate).pack(side='left')
+        ttk.Button(row2,text='Korrektur speichern',command=lambda:calculate(True)).pack(side='left',padx=6)
+        def reset():
+            default={'x_px':0,'y_px':0,'paper_width_mm':54.0,'paper_height_mm':86.0,'x_mm':0.0,'y_mm':0.0}
+            save_calibration(default);self.calibration=default
+            result.set('Kalibrierung zurückgesetzt: X 0 px · Y 0 px')
+        ttk.Button(row2,text='Zurücksetzen',command=reset).pack(side='right')
+
+    def _print_calibration_pattern(self, parent=None):
+        if self.running:
+            return messagebox.showwarning('Druck läuft','Erst den aktuellen Druck abwarten.',parent=parent)
+        if not messagebox.askyesno('Kalibrierblatt drucken',
+                 'Das Kalibrierblatt wird OHNE gespeicherte Korrektur gedruckt.\n'
+                 'Die offizielle KODAK-App muss getrennt sein. Jetzt ein Blatt verbrauchen?',parent=parent):
+            return
+        port=self.port.get().strip()
+        if not port:
+            return messagebox.showerror('COM-Port','Bitte COM-Port eintragen.',parent=parent)
+        self.running=True;self.cancel_flag.clear()
+        self.start_btn.configure(state='disabled');self.stop_btn.configure(state='disabled')
+        self.progress.start(12);self._show_page('log')
+        self.status.set('Kalibrierblatt wird gedruckt …')
+        if self.print_window is None or not self.print_window.win.winfo_exists():
+            self.print_window=PrintPreviewWindow(self.root)
+        else:self.print_window.active=True
+        self.print_window.show_photo(calibration_pattern(),'Kalibrierblatt')
+        threading.Thread(target=self._calibration_worker,args=(port,self.poll_var.get()),daemon=True).start()
+
+    def _calibration_worker(self,port,poll):
+        folder=OUTPUT/('calibration_'+time.strftime('%Y%m%d_%H%M%S'))
+        folder.mkdir(parents=True,exist_ok=True)
+        photo=folder/'kalibrierung.jpg';report=folder/'report.json'
+        calibration_pattern().save(photo,'JPEG',quality=94,subsampling=0,optimize=False)
+        try:
+            cmd=[sys.executable,str(DRIVER),'--send','--port',port,'--image',str(photo),'--report',str(report),'--emit-phases']
+            if poll:cmd.append('--poll')
+            with subprocess.Popen(cmd,cwd=str(BASE),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                  text=True,encoding='utf-8',errors='replace',bufsize=1) as process:
+                for line in process.stdout:
+                    event=parse_driver_event(line)
+                    if event and event[0]=='phase':
+                        code,name=event[1],event[2]
+                        self.ui_messages.put(('phase',f'{code} {name}'))
+                        self.ui_messages.put(('log',f'Kalibrierung: 0x{code} · {name}'))
+                    elif event and event[0]=='transfer':
+                        self.ui_messages.put(('transfer',(event[1],event[2])))
+                    elif event and event[0]=='diagnostic':
+                        self.ui_messages.put(('log','Diagnose: '+event[1]))
+                rc=process.wait(timeout=5)
+            error=None
+            if report.is_file():
+                data=json.loads(report.read_text(encoding='utf-8'))
+                error=data.get('error') or ('Protokoll meldet Fehler' if data.get('result')=='error' else None)
+            if rc or error:raise RuntimeError(str(error or f'Druckprozess Code {rc}'))
+            self.ui_messages.put(('log','Kalibrierblatt übertragen · Ränder am Papier messen.'))
+            self.ui_messages.put(('finished',(1,0,False,str(folder))))
+        except Exception as ex:
+            self.ui_messages.put(('log','Kalibrierung fehlgeschlagen: '+str(ex)))
+            self.ui_messages.put(('finished',(0,1,True,str(folder))))
+
     def save_project(self):
         if self.running:return
         path=filedialog.asksaveasfilename(title='Projekt speichern',defaultextension='.p210r.json',
@@ -933,7 +1055,7 @@ class App:
         if not item:return messagebox.showinfo('Info','Bitte zuerst ein Bild auswählen.')
         path=filedialog.asksaveasfilename(defaultextension='.jpg',filetypes=[('JPEG','*.jpg')],initialfile=item.path.stem+'_p210r.jpg')
         if path:
-            try:prepare_image(item,for_print=True).save(path,'JPEG',quality=94,subsampling=0)
+            try:apply_calibration(prepare_image(item,for_print=True),self.calibration).save(path,'JPEG',quality=94,subsampling=0)
             except Exception as ex:messagebox.showerror('Fehler',str(ex))
             else:self._log(f'Bild gespeichert: {path}')
 
@@ -945,6 +1067,7 @@ class App:
         if not DRIVER.exists():return messagebox.showerror('Fehler','V2.3 Druckroutine fehlt.')
         # Immutable snapshot; edits are disabled while running.
         snapshot=[copy.copy(x) for x in self.items if x.enabled]
+        calibration_snapshot=dict(self.calibration)
         self.running=True;self.cancel_flag.clear()
         self.start_btn.configure(state='disabled');self.stop_btn.configure(state='normal')
         self.status.set('Druck läuft …')
@@ -956,13 +1079,13 @@ class App:
         else:
             self.print_window.active=True
             self.print_window.win.deiconify()
-        threading.Thread(target=self._worker,args=(snapshot,port,self.poll_var.get()),daemon=True).start()
+        threading.Thread(target=self._worker,args=(snapshot,port,self.poll_var.get(),calibration_snapshot),daemon=True).start()
 
     def stop(self):
         self.cancel_flag.set();self._log('Stop angefordert: aktueller Druck läuft zu Ende.')
         self.status.set('Stop nach aktuellem Foto angefordert')
 
-    def _worker(self,items,port,poll):
+    def _worker(self,items,port,poll,calibration):
         jobid=time.strftime('%Y%m%d_%H%M%S')
         work=OUTPUT/jobid;work.mkdir(parents=True,exist_ok=True)
         jobs=[(item,c) for item in items for c in range(1,item.copies+1)]
@@ -974,7 +1097,7 @@ class App:
             self.ui_messages.put(('tree',(item.uid,'Druck läuft')))
             target=work/f'{index:04d}_{item.uid}.jpg';report=work/f'{index:04d}_{item.uid}.json'
             try:
-                prepare_image(item,for_print=True).save(target,'JPEG',quality=94,subsampling=0,optimize=False)
+                apply_calibration(prepare_image(item,for_print=True),calibration).save(target,'JPEG',quality=94,subsampling=0,optimize=False)
                 args=[sys.executable,str(DRIVER),'--send','--port',port,'--image',str(target),'--report',str(report)]
                 if poll:args.append('--poll')
                 self.ui_messages.put(('log',f'{index}/{len(jobs)} → {item.name}, Kopie {copy_num}/{item.copies}'))
