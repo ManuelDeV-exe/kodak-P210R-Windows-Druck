@@ -1,4 +1,4 @@
-# KODAK P210R Studio 1.8
+# KODAK P210R Studio 1.8.1
 
 Windows-Anwendung für den KODAK Mini 2 Retro P210R: Fotos gestalten, Polaroids beschriften, per Bluetooth drucken und den Druckversatz kalibrieren. Unabhängiges, KI-unterstützt entwickeltes Hobbyprojekt (vibe-coded).
 
@@ -37,3 +37,6 @@ Der Druckdaten- und Bluetooth-Übertragungsablauf der zuvor funktionierenden Ver
 Es sind **keine Beispielbilder** enthalten. Private Fotos, lokale Projektdateien und Ausgabeprotokolle gehören nicht ins GitHub-Repository.
 
 Projekt: https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck
+## Update 1.8.1
+
+Im Kalibrierfenster steht **TESTQUADRAT DRUCKEN** jetzt direkt oben. Das Fenster lässt sich bei hoher Windows-Anzeigeskalierung scrollen, damit auch die Berechnungs- und Speicherknöpfe erreichbar sind.
