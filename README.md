@@ -47,11 +47,13 @@ Die Fotogestaltung hat eine größere Vorschau, zwei Regler zum Feinpositioniere
 
 Sobald du den Druck startest, öffnet sich die Protokollansicht und zusätzlich ein eigenes Druckfenster. Dort läuft die animierte Farbzone für Gelb, Magenta, Cyan und Schutzschicht **von unten nach oben** über das Foto. Welche Farbe aktiv ist, richtet sich nach den empfangenen Druckerstatusmeldungen. Wie schnell sich die Animation bewegt, ist dagegen nur eine Veranschaulichung und keine gemessene Druckgeschwindigkeit.
 
-## Neu in Studio 1.7
+## Neu in Studio 1.8: Druckkalibrierung
 
-Bei der Bildübertragung zeigt das Studio jetzt die tatsächlich bestätigten JPEG-Datenmengen an. Während des Drucks nutzt es die vom Gerät gemeldeten Farbphasen für das Animationsfenster. Die Bewegung innerhalb einer Phase bleibt eine Visualisierung, kein exakt gemessener mechanischer Fortschritt.
+Über **Hilfe & Links → Druckkalibrierung** kannst du ein mittig platziertes Testquadrat ausdrucken, die vier Papierränder in Millimetern messen und die berechnete Korrektur speichern. Die Korrektur verschiebt das Bild erst bei der Druckausgabe, nicht in der Gestaltung. Das Testquadrat wird absichtlich ohne Korrektur gedruckt, damit eine Nachmessung sinnvoll bleibt. Die Messung sollte am fertigen Foto ohne Abreißstreifen erfolgen.
 
-**Polaroid 1:1,6 wurde ebenfalls angepasst:** Das Foto reicht nun beinahe bis an die Papierkanten (jeweils etwa 12–35 Pixel weißer Rand links und rechts), während unten der breite Beschriftungsstreifen erhalten bleibt. Das Verhältnis **1:1,6** bezieht sich hierbei auf das gesamte Papierformat von 640 × 1024 Pixeln, nicht auf den inneren Bildausschnitt.
+Außerdem ist die Zuordnung der beobachteten Druckphasen korrigiert: **FF** Druckstart, **05** Vorbereitung, **06** Gelb, **00** Magenta, **01** Cyan, **02** Schutzschicht, **03** abgeschlossen.
+
+Die Kalibrierung ist neu und noch am echten Gerät zu überprüfen. Die 30 Offline-Tests bestehen.
 
 ## Installation
 
