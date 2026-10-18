@@ -39,13 +39,13 @@ Das Papierformat des Druckers ändert sich dabei nicht: Die Anwendung erstellt e
 
 *Die Abbildungen sind Illustrationen, keine Screenshots der Anwendung.*
 
-## Neu in Studio 1.5
+## Neu in Studio 1.6
 
-Die Bildposition lässt sich jetzt nicht nur mit der Maus, sondern auch mit **zwei Feinreglern** für horizontal und vertikal einstellen. Die **−/+‑Tasten** ändern die Position jeweils um einen Prozentpunkt.
+Die Oberfläche ist jetzt klar in drei Ansichten aufgeteilt: **Druckwarteschlange**, **Fotogestaltung** und **Druckprotokoll**. So kannst du dich jeweils auf einen Arbeitsschritt konzentrieren, statt alle Bedienelemente gleichzeitig vor dir zu haben. Die Bereiche wechseln über die obere Navigation und klappen nicht wie ein Akkordeon auf und zu.
 
-Beim Drucken öffnet sich ein eigenes Fenster mit dem Foto. Passend zu den vom Drucker gemeldeten Phasen zieht eine **gelbe, magentafarbene, cyanfarbene oder helle Schutzschicht** als Animation von oben nach unten über die Vorschau. Das ist eine Visualisierung und **keine gemessene Druckgeschwindigkeit**.
+Die Fotogestaltung hat eine größere Vorschau, zwei Regler zum Feinpositionieren und separat scrollbare Einstellungen. In schmaleren Fenstern rutschen die Einstellungen unter die Vorschau.
 
-Die Oberfläche ist außerdem etwas übersichtlicher geworden: Warteschlange, Bildgestaltung und Druckausgabe sind klarer getrennt.
+Sobald du den Druck startest, öffnet sich die Protokollansicht und zusätzlich ein eigenes Druckfenster. Dort läuft die animierte Farbzone für Gelb, Magenta, Cyan und Schutzschicht **von unten nach oben** über das Foto. Welche Farbe aktiv ist, richtet sich nach den empfangenen Druckerstatusmeldungen. Wie schnell sich die Animation bewegt, ist dagegen nur eine Veranschaulichung und keine gemessene Druckgeschwindigkeit.
 
 ## Installation
 
