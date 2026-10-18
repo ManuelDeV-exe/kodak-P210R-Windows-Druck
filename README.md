@@ -8,7 +8,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Desktop-0078D4?logo=windows&logoColor=white)
-![Studio](https://img.shields.io/badge/Studio-1.2-6e7be8)
+![Studio](https://img.shields.io/badge/Studio-1.3-6e7be8)
 ![Drucktreiber](https://img.shields.io/badge/Bluetooth--Druck-V2.3%20erfolgreich-2b9348)
 
 </div>
@@ -28,11 +28,11 @@ Die eigentliche Bluetooth-Druckroutine wurde aus einer eigenen Protokollaufzeich
 | **Ohne Rahmen** | Foto ohne zusätzlichen weißen Rahmen. |
 | **Weißer Rand** | Klassischer Druck mit einstellbarer Randbreite. |
 | **Polaroid 1:1,2** | Hochformatige Fotofläche mit weißem Platz für Text. |
-| **Polaroid 1:1,4** | Längere Fotofläche und zusätzlicher weißer Textbereich. |
+| **Polaroid 1:1,4** | Längere Fotofläche und zusätzlicher weißer Textbereich. |\n| **Polaroid 1:1,6** | Noch schmalere Fotofläche und mehr Platz für Text. |
 
 Die Formate **1:1,2 und 1:1,4** beziehen sich auf das Verhältnis **Breite : Höhe der inneren Fotofläche**. Das physische Papierformat bleibt unverändert. Die Druckbilder werden auf **640 × 1024 Pixel** vorbereitet.
 
-## Funktionen in Studio 1.2
+## Funktionen in Studio 1.3
 
 - Bilder einzeln oder aus ganzen Ordnern importieren.
 - Bildvorschau mit unmittelbarer Anzeige der Bearbeitungen.
@@ -113,7 +113,7 @@ py -m unittest discover -s tests -v
 
 **Stand:** Der Bluetooth-Einzeldruck mit V2.3 ist erfolgreich erprobt; für alle neuen Layoutvarianten und lange Stapel steht der vollständige Hardwaretest noch aus.
 
-## Neu in Studio 1.2
+## Neu in Studio 1.3
 
 - **Mit der Maus zoomen und verschieben:** Mausrad in der Vorschau und Ziehen mit linker Maustaste. Der Bildausschnitt wird mitgedruckt.
 - **Eigenes App-Icon:** Kamerasymbol im Windows-Fenster.
@@ -124,7 +124,7 @@ py -m unittest discover -s tests -v
 - **EXIF-Datum:** Aufnahmedatum automatisch als Polaroid-Beschriftung übernehmen; ohne Metadaten bleibt der manuelle Text.
 - **KODAK-Link:** Herstellerwebseite aus der Anwendung öffnen.
 
-Die V2.3-Bluetooth-Druckroutine bleibt unverändert. Acht Offline-Tests wurden erfolgreich ausgeführt; die neue Oberfläche und längere Druckstapel sind noch am Gerät zu testen.
+**Neu in 1.3:** Bei Polaroid-Drucken wird das Foto für die tatsächliche Papierausgabe automatisch um 180° gedreht, während die Vorschau aufrecht bleibt. Bei Bedarf kann die Drehrichtung umgekehrt werden. Zusätzlich steht Polaroid 1:1,6 zur Verfügung. Die V2.3-Bluetooth-Druckroutine bleibt unverändert. Acht Offline-Tests wurden erfolgreich ausgeführt; die neue Oberfläche und längere Druckstapel sind noch am Gerät zu testen.
 
 ## Datenschutz
 
