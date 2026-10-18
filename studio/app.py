@@ -55,9 +55,9 @@ class Photo:
 
 
 LAYOUTS = ('Ohne Rahmen', 'Foto mit weißem Rand', 'Polaroid 1:1,2', 'Polaroid 1:1,4', 'Polaroid 1:1,6')
-INK = '#233044'
-BG = '#eef2f7'
-ACCENT = '#4765e9'
+INK = '#18273f'
+BG = '#edf2f8'
+ACCENT = '#3869e8'
 PROJECT_VERSION = 1
 FONT_CHOICES = ('Standard', 'Segoe UI', 'Arial', 'Georgia', 'Times New Roman', 'Consolas')
 FONT_FILES = {
@@ -239,14 +239,115 @@ def prepare_image(item, for_print=False):
     return canvas
 
 
+PRINT_PHASES = {
+    'FF': ('Vorbereitung', '#8b9ab3', 0.0),
+    '05': ('Gelb', '#f4d348', 0.28),
+    '06': ('Magenta', '#df4da7', 0.25),
+    '00': ('Cyan', '#22bacc', 0.27),
+    '01': ('Schutzschicht', '#c8d7ed', 0.27),
+    '02': ('Ausgabe läuft', '#8b9ab3', 0.0),
+    '03': ('Abgeschlossen', '#34a889', 0.0),
+}
+
+
+def make_phase_frame(original, phase_code, fraction):
+    """Decorative CMYP overlay. The sweep is NOT measured printer progress."""
+    result = original.convert('RGB').copy()
+    phase = PRINT_PHASES.get(str(phase_code).upper())
+    if not phase or phase[2] <= 0:
+        return result
+    _, color, opacity = phase
+    y = round(result.height * max(0.0, min(1.0, fraction)))
+    if y:
+        shade = Image.new('RGB', result.size, color)
+        mask = Image.new('L', result.size, 0)
+        ImageDraw.Draw(mask).rectangle((0, 0, result.width, y), fill=round(255*opacity))
+        result.paste(shade, (0, 0), mask)
+    if 0 < y < result.height:
+        ImageDraw.Draw(result).line((0, y, result.width, y), fill=color, width=max(2, result.height//150))
+    return result
+
+
+class PrintPreviewWindow:
+    """Independent top-level preview. Never sends printer commands."""
+    def __init__(self, master):
+        self.master=master
+        self.win=tk.Toplevel(master)
+        self.win.title('Druck läuft · P210R Studio')
+        self.win.geometry('570x750')
+        self.win.minsize(420,560)
+        self.win.configure(bg='#152238')
+        self.win.protocol('WM_DELETE_WINDOW',self.hide)
+        self.image=None
+        self.tk_image=None
+        self.phase_code='FF'
+        self.phase_started=time.monotonic()
+        self.active=True
+        self.heading=tk.Label(self.win,text='Foto wird vorbereitet',bg='#152238',fg='#ffffff',font=('Segoe UI',19,'bold'))
+        self.heading.pack(anchor='w',padx=22,pady=(21,4))
+        self.subtitle=tk.Label(self.win,text='Warte auf Druckerstatus …',bg='#152238',fg='#b9c7dd',font=('Segoe UI',11))
+        self.subtitle.pack(anchor='w',padx=22,pady=(0,14))
+        self.canvas=tk.Canvas(self.win,bg='#253753',highlightthickness=0)
+        self.canvas.pack(fill='both',expand=True,padx=22,pady=(0,15))
+        self.canvas.bind('<Configure>',lambda event:self.render())
+        self.foot=tk.Label(self.win,text='Animation zur Veranschaulichung · kein gemessener Druckfortschritt',bg='#152238',fg='#9eabc4',font=('Segoe UI',9))
+        self.foot.pack(anchor='w',padx=22,pady=(0,22))
+        self._tick()
+
+    def hide(self):
+        self.win.withdraw()
+
+    def show_photo(self, image, label):
+        self.image=image.convert('RGB').copy()
+        self.phase_code='FF'
+        self.phase_started=time.monotonic()
+        self.heading.configure(text=label)
+        self.subtitle.configure(text='Bildübertragung / Vorbereitung')
+        self.win.deiconify()
+        self.win.lift()
+        self.render()
+
+    def set_phase(self, raw):
+        code=str(raw).strip().split(' ',1)[0].upper()
+        if code not in PRINT_PHASES: return
+        if code != self.phase_code:
+            self.phase_code=code
+            self.phase_started=time.monotonic()
+        name=PRINT_PHASES[code][0]
+        self.subtitle.configure(text=f'Druckphase: {name}'+(' ✓' if code=='03' else ''))
+        self.render()
+
+    def render(self):
+        if self.image is None or not self.win.winfo_exists():return
+        w=max(80,self.canvas.winfo_width()-28)
+        h=max(80,self.canvas.winfo_height()-28)
+        ratio=min(w/self.image.width,h/self.image.height)
+        size=(max(1,int(self.image.width*ratio)),max(1,int(self.image.height*ratio)))
+        amount=min(1.0,(time.monotonic()-self.phase_started)/2.4)
+        frame=make_phase_frame(self.image,self.phase_code,amount)
+        self.tk_image=ImageTk.PhotoImage(frame.resize(size,Image.Resampling.LANCZOS))
+        self.canvas.delete('all')
+        self.canvas.create_image(self.canvas.winfo_width()//2,self.canvas.winfo_height()//2,image=self.tk_image)
+
+    def _tick(self):
+        if not self.win.winfo_exists():return
+        if self.active and self.image is not None and self.win.state()!='withdrawn':self.render()
+        self.win.after(75,self._tick)
+
+    def finish(self):
+        self.active=False
+        if self.win.winfo_exists():
+            if self.phase_code != '03':self.subtitle.configure(text='Übertragung beendet · Status bitte am Drucker prüfen')
+            else:self.subtitle.configure(text='Druck abgeschlossen ✓')
+
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.4')
+        root.title('KODAK P210R Studio · 1.5')
         self.icon_image = ImageTk.PhotoImage(make_icon())
         root.iconphoto(True, self.icon_image)
-        root.geometry('1280x880')
-        root.minsize(1030, 740)
+        root.geometry('1380x940')
+        root.minsize(1090, 780)
         self.items = []
         self.selected = None
         self.ui_messages = queue.Queue()
@@ -257,6 +358,7 @@ class App:
         self.drag_start = None
         self.preview_rect = None
         self.project_path = None
+        self.print_window = None
         root.configure(bg=BG)
         self.anim_tick=0
         self._build()
@@ -268,6 +370,11 @@ class App:
         s = ttk.Style()
         s.theme_use('clam')
         s.configure('TFrame',background=BG)
+        s.configure('TSeparator',background='#d6dfef')
+        s.configure('TEntry',padding=6)
+        s.configure('TCombobox',padding=6)
+        s.configure('TCheckbutton',background=BG,foreground=INK,font=('Segoe UI',10))
+        s.configure('TScale',background=BG,troughcolor='#d8e3f2')
         s.configure('TLabel',background=BG,foreground=INK,font=('Segoe UI',10))
         s.configure('TLabelframe',background=BG,foreground=INK)
         s.configure('TLabelframe.Label',background=BG,foreground=INK,font=('Segoe UI',10,'bold'))
@@ -280,8 +387,8 @@ class App:
         s.map('Treeview',background=[('selected','#cad5ff')],foreground=[('selected',INK)])
         outer = ttk.Frame(self.root, padding=17); outer.pack(fill='both', expand=True)
         top = ttk.Frame(outer); top.pack(fill='x', pady=(0,10))
-        ttk.Label(top, text='✦ KODAK P210R Studio', font=('Segoe UI',22,'bold')).pack(side='left')
-        ttk.Label(top, text='  · Bluetooth-Fotodruck & Stapelverarbeitung', foreground='#666').pack(side='left')
+        ttk.Label(top, text='◈  P210R Studio', font=('Segoe UI',23,'bold')).pack(side='left')
+        ttk.Label(top, text='  Fotos gestalten. Einfach drucken.', foreground='#666').pack(side='left')
         help_btn=ttk.Menubutton(top,text='Hilfe & Links  ▾')
         help_btn.pack(side='right',padx=(8,0))
         links=tk.Menu(help_btn,tearoff=0)
@@ -289,7 +396,7 @@ class App:
         links.add_command(label='GitHub – Quellcode ↗',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak'))
         links.add_command(label='GitHub – Anleitung ↗',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak#installation-und-erster-druck'))
         links.add_separator()
-        links.add_command(label='Über Studio 1.4',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.4\nUnabhängiges Open-Source-Entwicklungsprojekt\nDrucktreiber: stabile Version 2.3'))
+        links.add_command(label='Über Studio 1.5',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.5\nUnabhängiges Open-Source-Entwicklungsprojekt\nDrucktreiber: stabile Version 2.3'))
         help_btn['menu']=links
         ttk.Button(top, text='Bilder hinzufügen', command=self.add_files).pack(side='right', padx=3)
         ttk.Button(top, text='Projekt öffnen', command=self.open_project).pack(side='right', padx=3)
@@ -298,7 +405,7 @@ class App:
         mid = ttk.PanedWindow(outer, orient='horizontal'); mid.pack(fill='both', expand=True)
         left = ttk.Frame(mid, padding=(0,5,10,5)); mid.add(left, weight=2)
         right = ttk.Frame(mid, padding=(10,5,0,5)); mid.add(right, weight=3)
-        ttk.Label(left, text='Druckwarteschlange', font=('Segoe UI',12,'bold')).pack(anchor='w')
+        ttk.Label(left, text='01   Druckwarteschlange', font=('Segoe UI',13,'bold')).pack(anchor='w')
         table_frame = ttk.Frame(left); table_frame.pack(fill='both', expand=True, pady=7)
         self.tree = ttk.Treeview(table_frame, columns=('enabled','copies','status'), show='tree headings', selectmode='browse', height=12)
         self.tree.heading('#0', text='Datei'); self.tree.heading('enabled', text='✓');self.tree.column('enabled',width=38,anchor='center',stretch=False); self.tree.heading('copies', text='Kopien'); self.tree.heading('status', text='Status')
@@ -311,10 +418,10 @@ class App:
         controls = ttk.Frame(left); controls.pack(fill='x')
         for text,fn in [('↑',lambda:self.move(-1)),('↓',lambda:self.move(1)),('Entfernen',self.remove),('Liste leeren',self.clear)]:
             ttk.Button(controls,text=text,command=fn).pack(side='left',padx=(0,5))
-        logbox = ttk.LabelFrame(left,text='Druckprotokoll',padding=5); logbox.pack(fill='both',expand=True,pady=(12,0))
+        logbox = ttk.LabelFrame(left,text='Druckprotokoll · Details',padding=5); logbox.pack(fill='both',expand=True,pady=(12,0))
         self.log_widget = tk.Text(logbox,height=9,wrap='word',state='disabled',font=('Consolas',9))
         self.log_widget.pack(fill='both',expand=True)
-        ttk.Label(right,text='Bildvorschau & Bearbeitung',font=('Segoe UI',12,'bold')).pack(anchor='w')
+        ttk.Label(right,text='02   Foto gestalten',font=('Segoe UI',13,'bold')).pack(anchor='w')
         self.preview = tk.Canvas(right,bg='#1d2739',highlightthickness=0,height=345)
         self.preview.pack(fill='both',expand=True,pady=8)
         self.preview.bind('<Configure>',lambda _:self._schedule_preview())
@@ -327,6 +434,25 @@ class App:
         self.tip_label=ttk.Label(right,text='▼  Abreißstreifen: kurze Papierseite · nicht Teil des Druckbilds',foreground='#566783')
         self.tip_label.pack(anchor='w',pady=(0,4))
         ttk.Label(right,text='Mausrad: Zoom  ·  Linke Maustaste ziehen: Bild verschieben',foreground='#566783').pack(anchor='w')
+        # Fine position controls: -100…+100 percent of the available crop travel.
+        # Uses the same pan_x / pan_y coordinates as mouse dragging and project files.
+        pos_box=ttk.LabelFrame(right,text='Bildausschnitt fein positionieren',padding=(10,5))
+        pos_box.pack(fill='x',pady=(4,7))
+        self.pan_vars={}
+        self.pan_labels={}
+        for caption,axis in [('Horizontal','pan_x'),('Vertikal','pan_y')]:
+            pos_row=ttk.Frame(pos_box);pos_row.pack(fill='x',pady=2)
+            ttk.Label(pos_row,text=caption,width=12).pack(side='left')
+            ttk.Button(pos_row,text='−',width=3,command=lambda a=axis:self._nudge_pan(a,-0.01)).pack(side='left',padx=(0,3))
+            variable=tk.DoubleVar(value=0.0)
+            self.pan_vars[axis]=variable
+            ttk.Scale(pos_row,from_=-1,to=1,variable=variable,
+                      command=lambda value,a=axis:self._set_pan(a,value)).pack(side='left',fill='x',expand=True)
+            ttk.Button(pos_row,text='+',width=3,command=lambda a=axis:self._nudge_pan(a,0.01)).pack(side='left',padx=(3,4))
+            label=ttk.Label(pos_row,text='0 %',width=7,anchor='e');label.pack(side='left')
+            self.pan_labels[axis]=label
+        ttk.Label(pos_box,text='Feinjustierung in 1-%-Schritten mit − / +; Mausziehen und Regler bleiben synchron.',
+                  foreground='#566783').pack(anchor='w',pady=(2,0))
         edit = ttk.LabelFrame(right,text='Bild & Drucklayout',padding=10); edit.pack(fill='x')
         layoutrow=ttk.Frame(edit);layoutrow.pack(fill='x',pady=(0,7))
         ttk.Label(layoutrow,text='Druckstil:').pack(side='left',padx=(0,9))
@@ -381,7 +507,7 @@ class App:
             scale.pack(side='left',fill='x',expand=True,padx=7)
             valuelabel=ttk.Label(r,text='100 %',width=7);valuelabel.pack(side='left')
             self.sliders[attr]=(v,valuelabel)
-        bottom=ttk.LabelFrame(outer,text='Druck',padding=10);bottom.pack(fill='x',pady=(12,0))
+        bottom=ttk.LabelFrame(outer,text='03   Ausgabe & Druck',padding=12);bottom.pack(fill='x',pady=(12,0))
         ttk.Label(bottom,text='Bluetooth-COM-Port:').pack(side='left')
         self.port=tk.StringVar(value='COM5');ttk.Entry(bottom,textvariable=self.port,width=9).pack(side='left',padx=(5,12))
         self.poll_var=tk.BooleanVar(value=True)
@@ -451,7 +577,37 @@ class App:
         effective_zoom=max(1.08,it.zoom)
         it.pan_x=max(-1,min(1,it.pan_x+2*(event.x-x)/max(1,w)/(1-1/effective_zoom)))
         it.pan_y=max(-1,min(1,it.pan_y+2*(event.y-y)/max(1,h)/(1-1/effective_zoom)))
+        self._sync_pan_controls()
         self._schedule_preview()
+
+    def _set_pan(self,axis,value):
+        if self.running or getattr(self,'_syncing_pan',False):return
+        item=self._current()
+        if item is None:return
+        value=round(max(-1.0,min(1.0,float(value))),3)
+        setattr(item,axis,value)
+        self.pan_labels[axis].configure(text=f'{value:+.0%}' if value else '0 %')
+        self._schedule_preview()
+
+    def _nudge_pan(self,axis,step):
+        if self.running:return
+        item=self._current()
+        if item is None:return
+        value=round(max(-1.0,min(1.0,getattr(item,axis)+step)),3)
+        setattr(item,axis,value)
+        self._sync_pan_controls()
+        self._schedule_preview()
+
+    def _sync_pan_controls(self):
+        item=self._current()
+        self._syncing_pan=True
+        try:
+            for axis,var in self.pan_vars.items():
+                value=getattr(item,axis) if item else 0.0
+                var.set(value)
+                self.pan_labels[axis].configure(text=f'{value:+.0%}' if value else '0 %')
+        finally:
+            self._syncing_pan=False
 
     def _current(self):
         return next((x for x in self.items if x.uid==self.selected),None)
@@ -466,6 +622,7 @@ class App:
             self.font_var.set(item.font_name);self.exif_var.set(item.date_from_exif)
             self.border_var.set(item.border);self.border_text.configure(text=f'{item.border} px')
             self.orientation_var.set(item.print_rotate)
+            self._sync_pan_controls()
             for attr,(v,lbl) in self.sliders.items():v.set(getattr(item,attr));lbl.configure(text=f'{int(round(getattr(item,attr)*100))} %')
             self._schedule_preview()
 
@@ -509,6 +666,7 @@ class App:
         it=self._current()
         if it:
             it.pan_x=it.pan_y=0.0
+            self._sync_pan_controls()
             self._schedule_preview()
 
     def advanced_editor(self):
@@ -517,7 +675,7 @@ class App:
         if item is None:
             messagebox.showinfo('Weitere Bearbeitung','Bitte ein Bild auswählen.');return
         dialog=tk.Toplevel(self.root)
-        dialog.title('Weitere Bearbeitung · Studio 1.4')
+        dialog.title('Weitere Bearbeitung · Studio 1.5')
         dialog.geometry('850x690');dialog.minsize(650,540)
         dialog.transient(self.root)
         dialog.configure(bg=BG)
@@ -670,6 +828,11 @@ class App:
         self.status.set('Druck läuft …')
         self.phase.set('Druckphase: Übertragung / Vorbereitung')
         self.progress.start(12)
+        if self.print_window is None or not self.print_window.win.winfo_exists():
+            self.print_window=PrintPreviewWindow(self.root)
+        else:
+            self.print_window.active=True
+            self.print_window.win.deiconify()
         threading.Thread(target=self._worker,args=(snapshot,port,self.poll_var.get()),daemon=True).start()
 
     def stop(self):
@@ -684,6 +847,7 @@ class App:
         for index,(item,copy_num) in enumerate(jobs,1):
             if self.cancel_flag.is_set():break
             self.ui_messages.put(('status',f'Foto {index}/{len(jobs)}: {item.name}'))
+            self.ui_messages.put(('print_photo',(copy.copy(item),index,len(jobs))))
             self.ui_messages.put(('tree',(item.uid,'Druck läuft')))
             target=work/f'{index:04d}_{item.uid}.jpg';report=work/f'{index:04d}_{item.uid}.json'
             try:
@@ -736,7 +900,16 @@ class App:
                 action,data=self.ui_messages.get_nowait()
                 if action=='log':self._log(data)
                 elif action=='status':self.status.set(data)
-                elif action=='phase':self.phase.set('Druckphase: '+data)
+                elif action=='phase':
+                    self.phase.set('Druckphase: '+data)
+                    if self.print_window is not None and self.print_window.win.winfo_exists():self.print_window.set_phase(data)
+                elif action=='print_photo':
+                    item,number,total=data
+                    try:
+                        if self.print_window is not None and self.print_window.win.winfo_exists():
+                            self.print_window.active=True
+                            self.print_window.show_photo(prepare_image(item,for_print=False),f'{number} / {total}  ·  {item.name}')
+                    except Exception as exc:self._log('Druckvorschau nicht verfügbar: '+str(exc))
                 elif action=='tree':
                     uid,state=data
                     if self.tree.exists(uid):self.tree.set(uid,'status',state)
@@ -744,6 +917,7 @@ class App:
                     success,failed,stopped,path=data
                     self.running=False;self.start_btn.configure(state='normal');self.stop_btn.configure(state='disabled')
                     self.progress.stop();self.progress['value']=0
+                    if self.print_window is not None and self.print_window.win.winfo_exists():self.print_window.finish()
                     msg=f'{success} Übertragungen abgeschlossen, {failed} Fehler'+(' · Stapel gestoppt' if stopped else '')
                     self.status.set(msg);self._log(msg+' · Protokolle in '+path)
                     if failed:messagebox.showwarning('Druckstapel',msg+'\nDetails im Protokoll.')
@@ -754,9 +928,9 @@ class App:
         # A subtle animated activity marker, only while a print is active.
         self.anim_tick=(self.anim_tick+1)%4
         if self.running:
-            self.tip_label.configure(text='◀  Abreißstreifen links beim Auswurf  '+'·'*self.anim_tick)
+            self.tip_label.configure(text='▼  Abreißstreifen an der kurzen Papierseite  '+'·'*self.anim_tick)
         else:
-            self.tip_label.configure(text='◀  Abreißstreifen links beim Auswurf · nicht Teil des Druckbilds')
+            self.tip_label.configure(text='▼  Abreißstreifen an der kurzen Papierseite · nicht Teil des Druckbilds')
         self.root.after(280,self._animate)
 
     def _close(self):
