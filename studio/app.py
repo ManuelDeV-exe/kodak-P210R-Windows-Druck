@@ -1,4 +1,4 @@
-"""KODAK P210R Studio — local Tkinter frontend using unmodified v2.3 driver."""
+"""KODAK P210R Studio — Tkinter frontend using the proven v2.3 transfer algorithm."""
 import json
 import copy
 import datetime
@@ -206,12 +206,20 @@ def prepare_image(item, for_print=False):
         # The requested aspect ratio refers to photo inset, not the fixed paper.
         # 1:1.2 or 1:1.4 means inset height = inset width * ratio.
         ratio = {'Polaroid 1:1,2': 1.2, 'Polaroid 1:1,4': 1.4, 'Polaroid 1:1,6': 1.6}.get(item.layout, 1.4)
-        available_w = SIZE[0] - 2 * top
-        available_h = SIZE[1] - top - bottom_space
-        iw = min(available_w, int(available_h / ratio))
-        ih = round(iw * ratio)
-        x = (SIZE[0] - iw) // 2
-        rect = (x, top, x + iw, top + ih)
+        if item.layout == 'Polaroid 1:1,6':
+            # 1:1,6 is the full P210R print format (640x1024), not the
+            # internal picture aspect ratio. Use nearly the entire paper width
+            # and leave a generous white band below for the caption.
+            side = max(12, min(35, edge // 2))
+            bottom_space = 205
+            rect = (side, top, SIZE[0] - side, SIZE[1] - bottom_space)
+        else:
+            available_w = SIZE[0] - 2 * top
+            available_h = SIZE[1] - top - bottom_space
+            iw = min(available_w, int(available_h / ratio))
+            ih = round(iw * ratio)
+            x = (SIZE[0] - iw) // 2
+            rect = (x, top, x + iw, top + ih)
     rw, rh = rect[2]-rect[0], rect[3]-rect[1]
     if rw < 10 or rh < 10:
         raise ValueError('Rand zu groß')
@@ -270,12 +278,28 @@ def make_phase_frame(original, phase_code, fraction):
     return result
 
 
+def parse_driver_event(line):
+    """Parse diagnostic subprocess events. None for ordinary messages."""
+    parts = line.strip().split()
+    if len(parts) >= 3 and parts[0] == 'P210R_PHASE' and parts[1].upper() in PRINT_PHASES:
+        return ('phase', parts[1].upper(), ' '.join(parts[2:]))
+    if len(parts) == 3 and parts[0] == 'P210R_TRANSFER':
+        try:
+            done, total = int(parts[1]), int(parts[2])
+            if 0 <= done <= total and total > 0:
+                return ('transfer', done, total)
+        except ValueError: pass
+    if len(parts) >= 2 and parts[0] == 'P210R_DIAGNOSTIC':
+        return ('diagnostic', ' '.join(parts[1:]))
+    return None
+
+
 class PrintPreviewWindow:
     """Independent top-level preview. Never sends printer commands."""
     def __init__(self, master):
         self.master=master
         self.win=tk.Toplevel(master)
-        self.win.title('Druck läuft · P210R Studio 1.6')
+        self.win.title('Druck läuft · P210R Studio 1.7')
         self.win.geometry('570x750')
         self.win.minsize(420,560)
         self.win.configure(bg='#152238')
@@ -284,6 +308,9 @@ class PrintPreviewWindow:
         self.tk_image=None
         self.phase_code='FF'
         self.phase_started=time.monotonic()
+        self.last_status_at=None
+        self.transfer_done=0
+        self.transfer_total=0
         self.active=True
         self.heading=tk.Label(self.win,text='Foto wird vorbereitet',bg='#152238',fg='#ffffff',font=('Segoe UI',19,'bold'))
         self.heading.pack(anchor='w',padx=22,pady=(21,4))
@@ -292,7 +319,7 @@ class PrintPreviewWindow:
         self.canvas=tk.Canvas(self.win,bg='#253753',highlightthickness=0)
         self.canvas.pack(fill='both',expand=True,padx=22,pady=(0,15))
         self.canvas.bind('<Configure>',lambda event:self.render())
-        self.foot=tk.Label(self.win,text='Animation zur Veranschaulichung · kein gemessener Druckfortschritt',bg='#152238',fg='#9eabc4',font=('Segoe UI',9))
+        self.foot=tk.Label(self.win,text='Farbphase synchron zum Drucker · Balkenbewegung nur illustrativ',bg='#152238',fg='#9eabc4',font=('Segoe UI',9))
         self.foot.pack(anchor='w',padx=22,pady=(0,22))
         self._tick()
 
@@ -303,8 +330,11 @@ class PrintPreviewWindow:
         self.image=image.convert('RGB').copy()
         self.phase_code='FF'
         self.phase_started=time.monotonic()
+        self.last_status_at=None
+        self.transfer_done=0
+        self.transfer_total=0
         self.heading.configure(text=label)
-        self.subtitle.configure(text='Bildübertragung / Vorbereitung')
+        self.subtitle.configure(text='Bildübertragung · warte auf Statusmeldungen')
         self.win.deiconify()
         self.win.lift()
         self.render()
@@ -315,9 +345,15 @@ class PrintPreviewWindow:
         if code != self.phase_code:
             self.phase_code=code
             self.phase_started=time.monotonic()
+        self.last_status_at=time.monotonic()
         name=PRINT_PHASES[code][0]
-        self.subtitle.configure(text=f'Druckphase: {name}'+(' ✓' if code=='03' else ''))
+        self.subtitle.configure(text=f'Drucker meldet: {name} (0x{code})'+(' ✓' if code=='03' else ''))
         self.render()
+
+    def set_transfer(self, done, total):
+        self.transfer_done,self.transfer_total=done,total
+        if self.last_status_at is None and total:
+            self.subtitle.configure(text=f'Bildübertragung {done * 100 // total} % · warte auf Farbstatus')
 
     def render(self):
         if self.image is None or not self.win.winfo_exists():return
@@ -325,7 +361,9 @@ class PrintPreviewWindow:
         h=max(80,self.canvas.winfo_height()-28)
         ratio=min(w/self.image.width,h/self.image.height)
         size=(max(1,int(self.image.width*ratio)),max(1,int(self.image.height*ratio)))
-        amount=min(1.0,(time.monotonic()-self.phase_started)/2.4)
+        # Motion is illustrative: phase boundaries come from the printer, percentage within a phase does not.
+        # Hold below 100% until the printer reports a phase transition.
+        amount=min(0.94,(time.monotonic()-self.phase_started)/9.0)
         frame=make_phase_frame(self.image,self.phase_code,amount)
         self.tk_image=ImageTk.PhotoImage(frame.resize(size,Image.Resampling.LANCZOS))
         self.canvas.delete('all')
@@ -333,7 +371,10 @@ class PrintPreviewWindow:
 
     def _tick(self):
         if not self.win.winfo_exists():return
-        if self.active and self.image is not None and self.win.state()!='withdrawn':self.render()
+        if self.active and self.image is not None and self.win.state()!='withdrawn':
+            self.render()
+            if self.last_status_at is None and self.transfer_total and self.transfer_done>=self.transfer_total:
+                self.subtitle.configure(text='Übertragung fertig · noch keine Farbstatus-Antwort · siehe Druckprotokoll')
         self.win.after(75,self._tick)
 
     def finish(self):
@@ -345,7 +386,7 @@ class PrintPreviewWindow:
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.6')
+        root.title('KODAK P210R Studio · 1.7')
         self.icon_image = ImageTk.PhotoImage(make_icon())
         root.iconphoto(True, self.icon_image)
         root.geometry('1160x820')
@@ -403,7 +444,7 @@ class App:
         links.add_command(label='GitHub – Projekt',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck'))
         links.add_command(label='GitHub – Anleitung',command=lambda:webbrowser.open('https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck#installation'))
         links.add_separator()
-        links.add_command(label='Über Studio 1.6',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.6\nUnabhängiges, KI-unterstütztes Hobbyprojekt\nBluetooth-Druckroutine auf Basis V2.3'))
+        links.add_command(label='Über Studio 1.7',command=lambda:messagebox.showinfo('Über P210R Studio','KODAK P210R Studio 1.7\nUnabhängiges, KI-unterstütztes Hobbyprojekt\nBluetooth-Druckroutine auf Basis V2.3'))
         help_btn['menu']=links
         nav=ttk.Frame(self.shell);nav.pack(fill='x',pady=(0,12))
         self.nav_buttons={}
@@ -947,11 +988,17 @@ class App:
                     began=time.monotonic()
                     for line in process.stdout:
                         output_lines.append(line)
-                        if line.startswith('P210R_PHASE '):
-                            parts=line.strip().split(' ',2)
-                            if len(parts)==3:
-                                self.ui_messages.put(('phase',parts[2]))
-                                self.ui_messages.put(('tree',(item.uid,parts[2])))
+                        event = parse_driver_event(line)
+                        if event is not None:
+                            if event[0] == 'phase':
+                                code, name = event[1], event[2]
+                                self.ui_messages.put(('phase', f'{code} {name}'))
+                                self.ui_messages.put(('tree',(item.uid,name)))
+                                self.ui_messages.put(('log',f'Druckerstatus: 0x{code} · {name}'))
+                            elif event[0] == 'transfer':
+                                self.ui_messages.put(('transfer',(event[1], event[2])))
+                            elif event[0] == 'diagnostic':
+                                self.ui_messages.put(('log','Diagnose: '+event[1]))
                         if time.monotonic()-began>300:
                             process.kill()
                             raise TimeoutError('Druckauftrag nach 300 Sekunden abgebrochen')
@@ -982,6 +1029,10 @@ class App:
                 action,data=self.ui_messages.get_nowait()
                 if action=='log':self._log(data)
                 elif action=='status':self.status.set(data)
+                elif action=='transfer':
+                    done,total=data
+                    if self.print_window is not None and self.print_window.win.winfo_exists():
+                        self.print_window.set_transfer(done,total)
                 elif action=='phase':
                     self.phase.set('Druckphase: '+data)
                     if self.print_window is not None and self.print_window.win.winfo_exists():self.print_window.set_phase(data)
