@@ -13,6 +13,14 @@ POLL = bytes.fromhex('0300000000000000')
 WINDOW_PREFIX = bytes.fromhex('09000000')
 WINDOW = 32768
 
+PHASE_NAMES = {0xFF:'Vorbereitung', 0x05:'Gelb', 0x06:'Magenta', 0x00:'Cyan', 0x01:'Schutzschicht', 0x02:'Druck läuft (unbekannte Phase)', 0x03:'Abgeschlossen'}
+
+def decode_phase(packet):
+    if len(packet)==16 and packet[:8]==bytes.fromhex('0403010100000008'):
+        code=packet[-1]
+        return {'code': f'{code:02X}', 'name': PHASE_NAMES.get(code,'Unbekannter Status')}
+    return None
+
 
 def make_header(jpeg_size, mode):
     if mode == 'captured':
@@ -61,6 +69,7 @@ def main():
     ap.add_argument('--header-mode', choices=['image-size', 'captured'], default='image-size')
     ap.add_argument('--observe-seconds', type=int, default=60, help='Passive status monitoring after transfer')
     ap.add_argument('--poll', action='store_true', help='Send observed status query 03 during post-transfer phase')
+    ap.add_argument('--emit-phases',action='store_true',help='Print decoded phase observations as machine-readable lines')
     ap.add_argument('--chunk-size', type=int, default=650)
     ap.add_argument('--report', default='photo_print_report_v2_3.json')
     a = ap.parse_args()
@@ -196,11 +205,15 @@ def main():
                             packet = bytes(buffer[:8]); del buffer[:8]
                             report['post_transfer_observation'].append({'type': 'capture_completion_marker', 'hex': packet.hex()})
                             report['result'] = 'capture_completion_marker_seen_print_unverified'
+                            if a.emit_phases: print('P210R_PHASE 03 Abgeschlossen',flush=True)
                             break
                         if buffer[0] == 4 and buffer[1] == 3:
                             if len(buffer) < 16: break
                             packet = bytes(buffer[:16]); del buffer[:16]
-                            report['post_transfer_observation'].append({'type': 'printing_status', 'hex': packet.hex()})
+                            phase=decode_phase(packet)
+                            report['post_transfer_observation'].append({'type': 'printing_status', 'hex': packet.hex(), 'phase':phase})
+                            if phase and a.emit_phases:
+                                print('P210R_PHASE '+phase['code']+' '+phase['name'],flush=True)
                             continue
                         if buffer[0] == 8:
                             if len(buffer) < 16: break
