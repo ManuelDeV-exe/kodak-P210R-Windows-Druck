@@ -1,4 +1,4 @@
-# KODAK P210R Studio 1.4
+# KODAK P210R Studio 1.5
 
 Lokale Windows-Anwendung mit Fotovorschau, Bildbearbeitung, Polaroid-Layouts und Druckwarteschlange für den KODAK Mini 2 Retro P210R. Der **nachweislich funktionierende V2.3-Bluetooth-Drucktreiber** (`driver/print_photo.py`) bleibt unverändert.
 
@@ -60,3 +60,18 @@ Der unveränderte Drucktreiber V2.3 ist weiterhin unter `driver/print_photo.py` 
 Mit aktivierten Statusabfragen (Vorgabe) zeigt Studio erkannte Live-Phasen aus den tatsächlichen Bluetooth-Antworten: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` abgeschlossen. Die Bezeichnungen folgen den Beobachtungen am Gerät und sind noch nicht durch Herstellerprotokolle bestätigt. Ein separater `04 06` Abschlussmarker wird ebenfalls erkannt. Statusabfragen können abgeschaltet werden. Keine künstliche Fortschrittsprozent-Anzeige.
 
 Die serielle Übertragungsroutine des bewährten V2.3-Treibers bleibt in ihren Datenpaketen unverändert; ergänzt wurde allein die passive Status-Dekodierung und ihre Ausgabe für die Studio-Oberfläche.
+
+## Neu in Studio 1.5: Bildposition fein einstellen
+
+Unterhalb der Bildvorschau gibt es jetzt zwei Schieberegler für die **horizontale** und **vertikale** Bildverschiebung (jeweils -100 % bis +100 %). Neben jedem Regler sind **− / +**-Schaltflächen für Korrekturen um **1 Prozentpunkt**. Die Regler synchronisieren sich beim Verschieben mit der Maus, bei Bildwechsel und beim Zentrieren. Die Position wird wie bisher als `pan_x` / `pan_y` pro Bild in Projektdateien gespeichert. Auch ohne manuell eingeschalteten Zoom lässt sich das Bild fein verschieben. Die Bluetooth-Druckroutine bleibt unverändert.
+
+## Neu in Studio 1.5
+
+- Zwei Positionsregler unter der Vorschau, jeweils für horizontal und vertikal. Mit den Tasten **− / +** lässt sich der Bildausschnitt in 1-%-Schritten verschieben; auch ohne manuell gesetzten Zoom. Mausverschiebung und Regler zeigen dieselbe Position an.
+- Während des Druckens öffnet sich ein separates Fenster mit dem aktuellen Foto. Sobald der Drucker eine Farbphase meldet, läuft eine farbige Überlagerung von oben nach unten über die Vorschau: Gelb, Magenta, Cyan oder Schutzschicht. Die Animation zeigt **keinen echten Druckfortschritt** und beeinflusst nicht die Druckdaten.
+- Aufgeräumtere Bereiche **01 Druckwarteschlange**, **02 Foto gestalten** und **03 Ausgabe & Druck** sowie abgestimmte Farben und größere Bedienelemente.
+- Die Anzeige des Abreißstreifens weist jetzt auch während des Druckens auf die kurze Papierseite hin.
+
+Der originale V2.3-Datenversand bleibt erhalten. Die Druckphasen beruhen auf den tatsächlich erhaltenen Statusantworten; wenn der Drucker keine Antwort liefert, wird auch keine fiktive Druckphase vorgetäuscht.
+
+Das Studio wurde als Hobbyprojekt mit KI-Unterstützung (vibe-coded) entwickelt. Die Bedienoberfläche und der Ablauf werden anhand praktischer Drucktests laufend verbessert.
