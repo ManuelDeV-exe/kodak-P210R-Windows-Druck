@@ -1,5 +1,9 @@
 """KODAK P210R Studio — local Tkinter frontend using unmodified v2.3 driver."""
 import json
+import copy
+import datetime
+import webbrowser
+import math
 import os
 import queue
 import subprocess
@@ -11,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageEnhance, ImageOps, ImageTk, ImageDraw
+from PIL import Image, ImageEnhance, ImageOps, ImageTk, ImageDraw, ImageFont
 
 BASE = Path(__file__).resolve().parent
 DRIVER = BASE / 'driver' / 'print_photo.py'
@@ -35,6 +39,12 @@ class Photo:
     border: int = 22
     print_rotate: bool = False
     name: str = ''
+    enabled: bool = True
+    zoom: float = 1.0
+    pan_x: float = 0.0
+    pan_y: float = 0.0
+    font_name: str = 'Standard'
+    date_from_exif: bool = False
     def __post_init__(self):
         self.name = self.path.name
 
@@ -43,6 +53,96 @@ LAYOUTS = ('Ohne Rahmen', 'Foto mit weißem Rand', 'Polaroid 1:1,2', 'Polaroid 1
 INK = '#233044'
 BG = '#eef2f7'
 ACCENT = '#4765e9'
+PROJECT_VERSION = 1
+FONT_CHOICES = ('Standard', 'Segoe UI', 'Arial', 'Georgia', 'Times New Roman', 'Consolas')
+FONT_FILES = {
+    'Standard': ('segoepr.ttf', 'segoesc.ttf', 'segoeui.ttf'),
+    'Segoe UI': ('segoeui.ttf',), 'Arial': ('arial.ttf',),
+    'Georgia': ('georgia.ttf',), 'Times New Roman': ('times.ttf',),
+    'Consolas': ('consola.ttf',),
+}
+
+def exif_date(path):
+    """Prefer original capture date, fallback to date digitized; no filesystem timestamp."""
+    try:
+        with Image.open(path) as im:
+            exif = im.getexif()
+            # Pillow may store DateTimeOriginal under Exif IFD (34665).
+            detail = exif.get_ifd(0x8769) if hasattr(exif, 'get_ifd') else {}
+            raw = detail.get(36867) or detail.get(36868) or exif.get(306)
+        if raw:
+            return datetime.datetime.strptime(str(raw), '%Y:%m:%d %H:%M:%S').strftime('%d.%m.%Y')
+    except (OSError, ValueError, TypeError, OverflowError):
+        pass
+    return None
+
+def caption_for(item):
+    if item.date_from_exif:
+        return exif_date(item.path) or item.caption.strip()
+    return item.caption.strip()
+
+def choose_font(name, size):
+    for filename in FONT_FILES.get(name, FONT_FILES['Standard']):
+        for location in (f'C:/Windows/Fonts/{filename}', filename):
+            try:return ImageFont.truetype(location, size)
+            except OSError:pass
+    try:return ImageFont.truetype('DejaVuSans.ttf', size)
+    except OSError:return ImageFont.load_default()
+
+def apply_zoom_pan(im, target_size, fit_mode, zoom, pan_x, pan_y):
+    """Crop around normalized center; drag positive x shows content shifted right."""
+    rw, rh = target_size
+    if fit_mode != 'Füllen (Beschnitt)' and zoom <= 1.0001:
+        return ImageOps.contain(im, target_size, method=Image.Resampling.LANCZOS)
+    # Always fill target and then zoom using a crop of the *source*.
+    w,h = im.size
+    base_scale = max(rw / w, rh / h)
+    z = max(1.0, min(8.0, float(zoom)))
+    crop_w = min(w, rw / (base_scale*z))
+    crop_h = min(h, rh / (base_scale*z))
+    # pan coordinates in [-1,1], where +1 slides image right (shows left edge).
+    left = (w-crop_w) * (1.0 - max(-1,min(1,pan_x))) / 2
+    top = (h-crop_h) * (1.0 - max(-1,min(1,pan_y))) / 2
+    cropped=im.crop((int(round(left)),int(round(top)),int(round(left+crop_w)),int(round(top+crop_h))))
+    return cropped.resize((rw,rh),Image.Resampling.LANCZOS)
+
+def make_icon():
+    """Original vector-like camera pictogram, no bundled photographs or binaries."""
+    im=Image.new('RGBA',(64,64),(0,0,0,0))
+    d=ImageDraw.Draw(im)
+    d.rounded_rectangle((3,8,61,56),radius=13,fill='#4765e9')
+    d.rounded_rectangle((10,15,54,49),radius=7,outline='#ffffff',width=3)
+    d.ellipse((23,21,43,41),outline='#ffffff',width=4)
+    d.rounded_rectangle((14,3,32,14),radius=3,fill='#8c9dff')
+    return im
+
+def project_payload(items, project_path, port='COM5'):
+    base=Path(project_path).resolve().parent
+    data=[]
+    for it in items:
+        d={key:getattr(it,key) for key in ('uid','copies','rotate','fit','brightness','contrast','saturation','layout','caption','border','print_rotate','enabled','zoom','pan_x','pan_y','font_name','date_from_exif')}
+        try:d['path']=str(it.path.resolve().relative_to(base))
+        except ValueError:d['path']=str(it.path.resolve())
+        data.append(d)
+    return {'format':'kodak-p210r-studio-project','version':PROJECT_VERSION,'port':port,'items':data}
+
+def load_project_items(payload, project_path):
+    if payload.get('format')!='kodak-p210r-studio-project' or payload.get('version')!=PROJECT_VERSION:
+        raise ValueError('Unbekanntes Projektformat oder Version')
+    base=Path(project_path).resolve().parent
+    items=[];missing=[]
+    fields=set(Photo.__dataclass_fields__)-{'path','name'}
+    for entry in payload.get('items',[]):
+        raw=Path(entry['path']); path=raw if raw.is_absolute() else base/raw
+        path=path.resolve()
+        if not path.is_file():
+            missing.append(str(path));continue
+        kwargs={k:v for k,v in entry.items() if k in fields}
+        kwargs.pop('name',None)
+        kwargs['uid']=uuid.uuid4().hex[:10]
+        items.append(Photo(path,**kwargs))
+    return items,missing
+
 
 
 def prepare_image(item):
@@ -79,27 +179,15 @@ def prepare_image(item):
     rw, rh = rect[2]-rect[0], rect[3]-rect[1]
     if rw < 10 or rh < 10:
         raise ValueError('Rand zu groß')
-    if item.fit == 'Füllen (Beschnitt)':
-        final = ImageOps.fit(im, (rw, rh), method=Image.Resampling.LANCZOS)
-    else:
-        final = ImageOps.contain(im, (rw, rh), method=Image.Resampling.LANCZOS)
+    final = apply_zoom_pan(im, (rw,rh), item.fit, item.zoom, item.pan_x, item.pan_y)
     x = rect[0] + (rw - final.width)//2
     y = rect[1] + (rh - final.height)//2
     canvas.paste(final, (x, y))
-    if item.layout.startswith('Polaroid') and item.caption.strip():
+    if item.layout.startswith('Polaroid') and caption_for(item):
         from PIL import ImageFont
-        font = None
-        for fontname in ('C:/Windows/Fonts/segoepr.ttf','C:/Windows/Fonts/segoesc.ttf',
-                         'C:/Windows/Fonts/segoeui.ttf','DejaVuSans.ttf'):
-            try:
-                font=ImageFont.truetype(fontname, 33)
-                break
-            except OSError:
-                pass
-        if font is None:
-            font=ImageFont.load_default()
+        font=choose_font(item.font_name, 33)
         draw=ImageDraw.Draw(canvas)
-        label=' '.join(item.caption.strip().split())
+        label=' '.join(caption_for(item).split())
         max_width=SIZE[0]-50
         while len(label)>1 and draw.textbbox((0,0),label,font=font)[2]>max_width:
             label=label[:-2]+'…'
@@ -116,7 +204,9 @@ def prepare_image(item):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.1')
+        root.title('KODAK P210R Studio · 1.2')
+        self.icon_image = ImageTk.PhotoImage(make_icon())
+        root.iconphoto(True, self.icon_image)
         root.geometry('1280x880')
         root.minsize(1030, 740)
         self.items = []
@@ -126,6 +216,9 @@ class App:
         self.cancel_flag = threading.Event()
         self.preview_photo = None
         self.refresh_after = None
+        self.drag_start = None
+        self.preview_rect = None
+        self.project_path = None
         root.configure(bg=BG)
         self.anim_tick=0
         self._build()
@@ -152,19 +245,22 @@ class App:
         ttk.Label(top, text='✦ KODAK P210R Studio', font=('Segoe UI',22,'bold')).pack(side='left')
         ttk.Label(top, text='  · Bluetooth-Fotodruck & Stapelverarbeitung', foreground='#666').pack(side='left')
         ttk.Button(top, text='Bilder hinzufügen', command=self.add_files).pack(side='right', padx=3)
+        ttk.Button(top, text='Projekt öffnen', command=self.open_project).pack(side='right', padx=3)
+        ttk.Button(top, text='Projekt speichern', command=self.save_project).pack(side='right', padx=3)
         ttk.Button(top, text='Ordner hinzufügen', command=self.add_folder).pack(side='right', padx=3)
         mid = ttk.PanedWindow(outer, orient='horizontal'); mid.pack(fill='both', expand=True)
         left = ttk.Frame(mid, padding=(0,5,10,5)); mid.add(left, weight=2)
         right = ttk.Frame(mid, padding=(10,5,0,5)); mid.add(right, weight=3)
         ttk.Label(left, text='Druckwarteschlange', font=('Segoe UI',12,'bold')).pack(anchor='w')
         table_frame = ttk.Frame(left); table_frame.pack(fill='both', expand=True, pady=7)
-        self.tree = ttk.Treeview(table_frame, columns=('copies','status'), show='tree headings', selectmode='browse', height=12)
-        self.tree.heading('#0', text='Datei'); self.tree.heading('copies', text='Kopien'); self.tree.heading('status', text='Status')
+        self.tree = ttk.Treeview(table_frame, columns=('enabled','copies','status'), show='tree headings', selectmode='browse', height=12)
+        self.tree.heading('#0', text='Datei'); self.tree.heading('enabled', text='✓');self.tree.column('enabled',width=38,anchor='center',stretch=False); self.tree.heading('copies', text='Kopien'); self.tree.heading('status', text='Status')
         self.tree.column('#0', width=275, stretch=True); self.tree.column('copies', width=65, anchor='center', stretch=False)
         self.tree.column('status', width=125, anchor='w', stretch=False)
         bar = ttk.Scrollbar(table_frame, orient='vertical', command=self.tree.yview); self.tree.configure(yscrollcommand=bar.set)
         self.tree.pack(side='left', fill='both', expand=True); bar.pack(side='right', fill='y')
         self.tree.bind('<<TreeviewSelect>>', self._select)
+        self.tree.bind('<Button-1>', self._tree_click, add='+')
         controls = ttk.Frame(left); controls.pack(fill='x')
         for text,fn in [('↑',lambda:self.move(-1)),('↓',lambda:self.move(1)),('Entfernen',self.remove),('Liste leeren',self.clear)]:
             ttk.Button(controls,text=text,command=fn).pack(side='left',padx=(0,5))
@@ -175,8 +271,15 @@ class App:
         self.preview = tk.Canvas(right,bg='#1d2739',highlightthickness=0,height=345)
         self.preview.pack(fill='both',expand=True,pady=8)
         self.preview.bind('<Configure>',lambda _:self._schedule_preview())
+        self.preview.bind('<MouseWheel>',self._mouse_zoom)
+        self.preview.bind('<Button-4>',lambda e:self._mouse_zoom(e,1))
+        self.preview.bind('<Button-5>',lambda e:self._mouse_zoom(e,-1))
+        self.preview.bind('<ButtonPress-1>',self._drag_begin)
+        self.preview.bind('<B1-Motion>',self._drag_move)
+        self.preview.bind('<ButtonRelease-1>',lambda e:setattr(self,'drag_start',None))
         self.tip_label=ttk.Label(right,text='◀  Abreißstreifen links beim Auswurf · nicht Teil des Druckbilds',foreground='#566783')
         self.tip_label.pack(anchor='w',pady=(0,4))
+        ttk.Label(right,text='Mausrad: Zoom  ·  Linke Maustaste ziehen: Bild verschieben',foreground='#566783').pack(anchor='w')
         edit = ttk.LabelFrame(right,text='Bild & Drucklayout',padding=10); edit.pack(fill='x')
         layoutrow=ttk.Frame(edit);layoutrow.pack(fill='x',pady=(0,7))
         ttk.Label(layoutrow,text='Druckstil:').pack(side='left',padx=(0,9))
@@ -190,6 +293,15 @@ class App:
         self.caption_entry=ttk.Entry(captionrow,textvariable=self.caption_var)
         self.caption_entry.pack(side='left',fill='x',expand=True)
         self.caption_var.trace_add('write',lambda *_:self._change('caption',self.caption_var.get()))
+        fontrow=ttk.Frame(edit);fontrow.pack(fill='x',pady=(0,7))
+        ttk.Label(fontrow,text='Schriftart:').pack(side='left',padx=(0,8))
+        self.font_var=tk.StringVar(value='Standard')
+        fonts=ttk.Combobox(fontrow,textvariable=self.font_var,values=FONT_CHOICES,state='readonly',width=20)
+        fonts.pack(side='left',fill='x',expand=True)
+        fonts.bind('<<ComboboxSelected>>',lambda _:self._change('font_name',self.font_var.get()))
+        self.exif_var=tk.BooleanVar(value=False)
+        ttk.Checkbutton(fontrow,text='EXIF-Datum',variable=self.exif_var,command=lambda:self._change('date_from_exif',self.exif_var.get())).pack(side='left',padx=(10,0))
+        ttk.Button(fontrow,text='KODAK ↗',command=lambda:webbrowser.open('https://www.kodakphotoprinter.com/')).pack(side='left',padx=(8,0))
         borderrow=ttk.Frame(edit);borderrow.pack(fill='x',pady=(0,7))
         ttk.Label(borderrow,text='Weißer Rand:').pack(side='left',padx=(0,8))
         self.border_var=tk.IntVar(value=22)
@@ -252,10 +364,45 @@ class App:
         for path in paths:
             try:
                 with Image.open(path) as im: im.verify()
-                item=Photo(path); self.items.append(item);self.tree.insert('', 'end', iid=item.uid,text=item.name,values=(item.copies,'Wartend'));added+=1
+                item=Photo(path); self.items.append(item);self.tree.insert('', 'end', iid=item.uid,text=item.name,values=('☑',item.copies,'Wartend'));added+=1
             except Exception as ex:self._log(f'Übersprungen: {path.name}: {ex}')
         if added and self.selected is None:self.tree.selection_set(self.items[0].uid);self._select()
         self.status.set(f'{len(self.items)} Fotos in der Warteschlange')
+
+    def _tree_click(self,event):
+        if self.running:return
+        row=self.tree.identify_row(event.y)
+        if row and self.tree.identify_column(event.x)=='#1':
+            item=next((x for x in self.items if x.uid==row),None)
+            if item:
+                item.enabled=not item.enabled
+                self.tree.set(row,'enabled','☑' if item.enabled else '☐')
+                self.status.set(f'{sum(x.enabled for x in self.items)} aktive Fotos')
+            return 'break'
+
+    def _mouse_zoom(self,event,direction=None):
+        if self.running:return
+        it=self._current()
+        if not it:return
+        sign=direction if direction is not None else (1 if event.delta>0 else -1)
+        it.zoom=max(1.0,min(8.0,it.zoom*(1.12 if sign>0 else 1/1.12)))
+        if it.zoom==1:it.pan_x=it.pan_y=0.0
+        self._schedule_preview()
+
+    def _drag_begin(self,event):
+        self.drag_start=(event.x,event.y)
+
+    def _drag_move(self,event):
+        if self.running or not self.drag_start:return
+        it=self._current()
+        if not it:return
+        x,y=self.drag_start;self.drag_start=(event.x,event.y)
+        if not self.preview_rect:return
+        _,_,w,h=self.preview_rect
+        if it.zoom>1:
+            it.pan_x=max(-1,min(1,it.pan_x+2*(event.x-x)/max(1,w)/(1-1/it.zoom)))
+            it.pan_y=max(-1,min(1,it.pan_y+2*(event.y-y)/max(1,h)/(1-1/it.zoom)))
+            self._schedule_preview()
 
     def _current(self):
         return next((x for x in self.items if x.uid==self.selected),None)
@@ -267,6 +414,7 @@ class App:
         if item:
             self.fit_var.set(item.fit);self.copies_var.set(item.copies)
             self.layout_var.set(item.layout);self.caption_var.set(item.caption)
+            self.font_var.set(item.font_name);self.exif_var.set(item.date_from_exif)
             self.border_var.set(item.border);self.border_text.configure(text=f'{item.border} px')
             self.orientation_var.set(item.print_rotate)
             for attr,(v,lbl) in self.sliders.items():v.set(getattr(item,attr));lbl.configure(text=f'{int(round(getattr(item,attr)*100))} %')
@@ -299,6 +447,7 @@ class App:
         if item:
             item.rotate=0;item.fit='Füllen (Beschnitt)';item.brightness=item.contrast=item.saturation=1
             item.layout='Foto mit weißem Rand';item.caption='';item.border=22;item.print_rotate=False
+            item.zoom=1.0;item.pan_x=item.pan_y=0.0;item.font_name='Standard';item.date_from_exif=False
             self._select()
 
     def _schedule_preview(self):
@@ -307,7 +456,7 @@ class App:
 
     def _render_preview(self):
         self.refresh_after=None
-        item=self._current();self.preview.delete('all')
+        item=self._current();self.preview.delete('all');self.preview_rect=None
         if not item:
             self.preview.create_text(max(self.preview.winfo_width()//2,100),max(self.preview.winfo_height()//2,100),text='Fotos hinzufügen, um eine Vorschau zu sehen',fill='white');return
         try:
@@ -318,6 +467,7 @@ class App:
             cx=self.preview.winfo_width()//2;cy=self.preview.winfo_height()//2
             self.preview.create_rectangle(cx-im.width//2-8,cy-im.height//2-8,cx+im.width//2+8,cy+im.height//2+8,fill='#152035',outline='')
             self.preview.create_image(cx,cy,image=self.preview_photo)
+            self.preview_rect=(cx-im.width//2,cy-im.height//2,im.width,im.height)
             self.preview.create_line(cx-im.width//2-17,cy-im.height//2,cx-im.width//2-17,cy+im.height//2,fill='#f4c271',width=3,dash=(5,4))
         except Exception as ex:self._log(f'Vorschaufehler: {ex}')
 
@@ -344,6 +494,37 @@ class App:
         for iid in self.tree.get_children():self.tree.delete(iid)
         self.preview.delete('all')
         self.status.set('Bereit · Keine Fotos')
+        self.project_path=None
+
+    def save_project(self):
+        if self.running:return
+        path=filedialog.asksaveasfilename(title='Projekt speichern',defaultextension='.p210r.json',
+            filetypes=[('P210R-Projekt','*.p210r.json'),('JSON','*.json')],initialfile=Path(self.project_path).name if self.project_path else 'mein_projekt.p210r.json')
+        if not path:return
+        try:
+            payload=project_payload(self.items,path,self.port.get().strip())
+            tmp=Path(path+'.tmp')
+            tmp.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
+            tmp.replace(path)
+            self.project_path=path
+            self._log('Projekt gespeichert: '+path)
+        except Exception as ex:messagebox.showerror('Projekt speichern',str(ex))
+
+    def open_project(self):
+        if self.running:return
+        path=filedialog.askopenfilename(title='Projekt öffnen',filetypes=[('P210R-Projekt','*.p210r.json'),('JSON','*.json')])
+        if not path:return
+        if self.items and not messagebox.askyesno('Projekt öffnen','Aktuelle Warteschlange ersetzen?'):return
+        try:
+            payload=json.loads(Path(path).read_text(encoding='utf-8'))
+            items,missing=load_project_items(payload,path)
+        except Exception as ex:return messagebox.showerror('Projekt öffnen',str(ex))
+        self.clear();self.items=items;self.port.set(str(payload.get('port','COM5')))
+        for item in items:self.tree.insert('', 'end', iid=item.uid,text=item.name,values=('☑' if item.enabled else '☐',item.copies,'Wartend'))
+        if items:self.tree.selection_set(items[0].uid);self._select()
+        self.project_path=path
+        self.status.set(f'{len(items)} Bilder aus Projekt geladen')
+        if missing:messagebox.showwarning('Fehlende Bilddateien',f'{len(missing)} Bilder nicht gefunden und übersprungen:\n'+'\n'.join(missing[:8]))
 
     def export(self):
         item=self._current()
@@ -356,12 +537,12 @@ class App:
 
     def start(self):
         if self.running:return
-        if not self.items:return messagebox.showinfo('Keine Bilder','Füge zuerst Fotos hinzu.')
+        if not any(x.enabled for x in self.items):return messagebox.showinfo('Keine aktiven Bilder','Bitte mindestens ein Foto in der Warteschlange anhaken.')
         port=self.port.get().strip()
         if not port:return messagebox.showerror('Fehler','Bitte COM-Port eintragen.')
         if not DRIVER.exists():return messagebox.showerror('Fehler','V2.3 Druckroutine fehlt.')
         # Immutable snapshot; edits are disabled while running.
-        snapshot=[Photo(x.path,uid=x.uid,copies=x.copies,rotate=x.rotate,fit=x.fit,brightness=x.brightness,contrast=x.contrast,saturation=x.saturation,layout=x.layout,caption=x.caption,border=x.border,print_rotate=x.print_rotate) for x in self.items]
+        snapshot=[copy.copy(x) for x in self.items if x.enabled]
         self.running=True;self.cancel_flag.clear()
         self.start_btn.configure(state='disabled');self.stop_btn.configure(state='normal')
         self.status.set('Druck läuft …')
