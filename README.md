@@ -8,7 +8,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Desktop-0078D4?logo=windows&logoColor=white)
-![Studio](https://img.shields.io/badge/Studio-1.3-6e7be8)
+![Studio](https://img.shields.io/badge/Studio-1.4-6e7be8)
 ![Drucktreiber](https://img.shields.io/badge/Bluetooth--Druck-V2.3%20erfolgreich-2b9348)
 
 </div>
@@ -32,7 +32,7 @@ Die eigentliche Bluetooth-Druckroutine wurde aus einer eigenen Protokollaufzeich
 
 Die Formate **1:1,2 und 1:1,4** beziehen sich auf das Verhältnis **Breite : Höhe der inneren Fotofläche**. Das physische Papierformat bleibt unverändert. Die Druckbilder werden auf **640 × 1024 Pixel** vorbereitet.
 
-## Funktionen in Studio 1.3
+## Funktionen in Studio 1.4
 
 - Bilder einzeln oder aus ganzen Ordnern importieren.
 - Bildvorschau mit unmittelbarer Anzeige der Bearbeitungen.
@@ -113,7 +113,7 @@ py -m unittest discover -s tests -v
 
 **Stand:** Der Bluetooth-Einzeldruck mit V2.3 ist erfolgreich erprobt; für alle neuen Layoutvarianten und lange Stapel steht der vollständige Hardwaretest noch aus.
 
-## Neu in Studio 1.3
+## Neu in Studio 1.4
 
 - **Mit der Maus zoomen und verschieben:** Mausrad in der Vorschau und Ziehen mit linker Maustaste. Der Bildausschnitt wird mitgedruckt.
 - **Eigenes App-Icon:** Kamerasymbol im Windows-Fenster.
@@ -125,6 +125,17 @@ py -m unittest discover -s tests -v
 - **KODAK-Link:** Herstellerwebseite aus der Anwendung öffnen.
 
 **Neu in 1.3:** Bei Polaroid-Drucken wird das Foto für die tatsächliche Papierausgabe automatisch um 180° gedreht, während die Vorschau aufrecht bleibt. Bei Bedarf kann die Drehrichtung umgekehrt werden. Zusätzlich steht Polaroid 1:1,6 zur Verfügung. Die V2.3-Bluetooth-Druckroutine bleibt unverändert. Acht Offline-Tests wurden erfolgreich ausgeführt; die neue Oberfläche und längere Druckstapel sind noch am Gerät zu testen.
+
+## Studio 1.4: Weitere Bearbeitung und Live-Druckphasen
+
+- **Weitere Bearbeitung:** Lightroom-ähnlicher Dialog mit Belichtung, Lichtern, Tiefen, Farbtemperatur, Schärfe, Live-Vorschau und Vorher/Nachher.
+- **Abreißstreifen:** Vorschau markiert nun die kurze Papierseite (unten beim Hochformat) statt irrtümlich die linke lange Kante.
+- **Verschieben ohne Zoom:** Bildausschnitt mit der Maus verstellen; zusätzliche Schaltfläche zum Zentrieren.
+- **Alle Fotoeinstellungen zurücksetzen:** einschließlich Kopien und Druckauswahl.
+- **Hilfe & Links:** KODAK-Website und GitHub im Untermenü.
+- **Statusabfragen standardmäßig aktiv:** dekodierte tatsächliche Antworten: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` abgeschlossen. Zuordnung basiert auf Praxiserfahrungen, nicht offizieller Dokumentation. Es werden keine fiktiven Fortschrittswerte erzeugt.
+
+**10 Offline-Tests bestanden.** Die seriellen Druckdatenpakete der erfolgreichen V2.3-Übertragung wurden nicht verändert; ausschließlich die Ausgabe/Dekodierung von Statusmeldungen wurde ergänzt. Neue GUI-Funktionen sind noch vor Ort zu testen.
 
 ## Datenschutz
 
