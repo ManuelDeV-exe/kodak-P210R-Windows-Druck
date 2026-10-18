@@ -521,6 +521,7 @@ class App:
         dialog.geometry('850x690');dialog.minsize(650,540)
         dialog.transient(self.root)
         dialog.configure(bg=BG)
+        original=copy.copy(item)
         before=copy.copy(item)
         before.exposure=before.highlights=before.shadows=before.warmth=before.sharpness=0.0
         layout=ttk.Frame(dialog,padding=16);layout.pack(fill='both',expand=True)
@@ -561,7 +562,7 @@ class App:
                 var.set(0.0);setattr(item,key,0.0)
             show();self._schedule_preview()
         def cancel():
-            for key in vars:setattr(item,key,getattr(before,key))
+            for key in vars:setattr(item,key,getattr(original,key))
             self._schedule_preview();dialog.destroy()
         ttk.Button(actions,text='Korrekturen zurücksetzen',command=defaults).pack(side='left')
         ttk.Button(actions,text='Abbrechen',command=cancel).pack(side='right',padx=4)
