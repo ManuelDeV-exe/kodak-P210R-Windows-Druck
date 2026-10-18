@@ -1,46 +1,39 @@
-# KODAK P210R Studio 1.7
+# KODAK P210R Studio 1.8
 
-Eine Windows-Anwendung für Bildbearbeitung, Polaroid-Layouts und Bluetooth-Fotodruck mit dem KODAK Mini 2 Retro P210R. Unabhängiges Hobbyprojekt, mit KI-Unterstützung (vibe-coded) entwickelt.
+Windows-Anwendung für den KODAK Mini 2 Retro P210R: Fotos gestalten, Polaroids beschriften, per Bluetooth drucken und den Druckversatz kalibrieren. Unabhängiges, KI-unterstützt entwickeltes Hobbyprojekt (vibe-coded).
 
-## Neu in 1.7
+## Installation
 
-Das animierte Druckfenster bekommt jetzt echte Ereignisse vom Python-Drucktreiber:
+1. ZIP vollständig entpacken; Python 3.10+ verwenden.
+2. Drucker per Bluetooth koppeln. Seriellen COM-Port in Windows prüfen (bei bisherigen Tests COM5).
+3. `STARTEN.bat` ausführen.
+4. Bilder importieren, Layout wählen und drucken.
 
-- **Bildübertragung:** Der Drucktreiber gibt die bestätigte übertragene Bytezahl aus. Die Anwendung zeigt den daraus berechneten Übertragungsfortschritt in Prozent.
-- **Druckphasen:** Sobald ein Statuspaket `04 03 01 01 ...` vom Drucker eintrifft, wechselt das Fenster zur gemeldeten Phase: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` fertig.
-- **Animation:** Während einer Farbphase wandert die farbige Zone **von unten nach oben**. Die Bewegung ist *nur eine Visualisierung*; es gibt im analysierten Protokoll keine gesicherte Prozentangabe innerhalb einer Farbe. Die Animation stoppt bei maximal 94 % und beginnt erst beim nächsten echten Statuscode neu.
-- **Diagnose:** Wenn über den beobachteten Zeitraum kein Farbstatus kommt, meldet die Anwendung das ausdrücklich. Der Druckbericht enthält die empfangenen Rohpakete.
+## Neu: Druckkalibrierung
 
-Die Befehle zur Bildübertragung und der bestätigte V2.3-Druckablauf bleiben unverändert. Die zusätzliche Konsolenausgabe ist ausschließlich für die Benutzeroberfläche gedacht.
+1. Oben rechts **Hilfe & Links → Druckkalibrierung…** wählen.
+2. Mit **Testquadrat drucken** eine Referenzseite ausgeben. Das Testmuster ist exakt mittig auf dem Datenbild platziert und wird **immer ohne Kalibrierkorrektur** gedruckt.
+3. Den fertigen Ausdruck ggf. von den Abreißstreifen befreien. Abstände **vom Papierrand zum schwarzen Quadrat** mit einem Lineal messen: links, rechts, oben und unten. In **Millimetern** eintragen.
+4. Die Papierbreite und -höhe in mm prüfen (voreingestellt **54 × 86 mm** als Näherungswerte für den fertigen Ausdruck; tatsächliche Papiermaße sind maßgeblich).
+5. **Korrektur berechnen** zur Prüfung und danach **Korrektur speichern**. Erneut das Quadrat drucken und die Messungen vergleichen.
+6. **Zurücksetzen** setzt X und Y wieder auf null.
 
-## Anwendung starten
+**Berechnung:** Horizontaler Versatz = (rechts − links) / 2 mm; vertikaler Versatz = (unten − oben) / 2 mm. Positive Werte verschieben das fertige Druckbild in die jeweilige positive Druckbildrichtung. Die Anwendung rechnet mm über die eingegebene physische Papiergröße in Bildpixel um.
 
-1. ZIP vollständig entpacken und `STARTEN.bat` doppelklicken.
-2. Drucker koppeln und den seriellen Bluetooth-Port einstellen (beim bisherigen Test COM5).
-3. Foto(s) hinzufügen, Gestaltung bearbeiten und drucken.
-4. Das Druckfenster und das automatisch geöffnete Protokoll beobachten.
+**Wichtig:** Kalibrierung korrigiert die **Lage des gesamten Druckbildes auf dem Papier**, nicht die bewusst angelegte Größe des oberen oder unteren Polaroid-Randes. Bei absichtlich verschieden großen Polaroid-Rändern kann man deren Abstand nicht mit den vier Außenmaßen eines normalen Fotos gleichsetzen. Deshalb wird ein eigenes, symmetrisches Testquadrat benutzt.
 
-Für einen direkten Diagnoselauf auf COM5 (mit selbstgewählter lokaler Bilddatei) geht auch:
+Die globale Kalibrierung wird lokal unter `%APPDATA%\P210RStudio\calibration.json` (bzw. dem lokalen Konfigurationspfad) gespeichert. Bild- und Projektdateien bleiben unverändert. Die Korrektur wird **nach der für den Druck notwendigen Drehung** auf das Druck-JPEG angewendet, auch bei Stapeln und JPEG-Export.
 
-```cmd
-py driver\print_photo.py --send --port COM5 --image "C:\Pfad\zum\Foto.jpg" --poll --emit-phases
-```
+## Druckphasen
 
-Die JSON-Berichte liegen bei Studiostapeln im Unterordner `output/` des jeweiligen Auftrags. Wenn der Drucker arbeitet, aber die Farben nicht gemeldet werden, ist genau dieser Bericht für die nächste Analyse hilfreich.
+Der Drucker meldet laut bisherigen Gerätetests: `FF` Druckstart, `05` Vorbereitung, `06` Gelb, `00` Magenta, `01` Cyan, `02` Schutzschicht, `03` abgeschlossen. Die Farbanimation bewegt sich von unten nach oben; **die Animation innerhalb einer Farbe ist nicht mechanisch gemessener Fortschritt**.
 
-## Was die Fortschrittswerte aussagen
+## Tests und Hinweise
 
-- Der Prozentwert während der **Übertragung** bezieht sich auf gesendete/abgedeckte JPEG-Bytes, nicht auf den mechanischen Druck.
-- Die **Farbphase** beruht auf einer tatsächlichen Antwort des Druckers.
-- Der Balken *innerhalb* einer Farbphase ist weiterhin nicht auf einen Encoder oder eine reale Prozentmeldung synchronisiert. Eine echte Feinmessung ist mit dem derzeit bekannten Protokoll nicht möglich.
-- `02` bleibt absichtlich ohne behauptete Bedeutung.
+`py -m unittest discover -s tests -v` — 30 Offline-Tests erfolgreich.
 
-23 Offline-Tests bestanden. Neue Statusanzeige noch nicht am echten Drucker bestätigt.
+Der Druckdaten- und Bluetooth-Übertragungsablauf der zuvor funktionierenden Version bleibt erhalten. **Studio 1.8 und insbesondere der Kalibrier-Testdruck müssen noch am realen P210R geprüft werden.** Ein vollständig an den Drucker übermitteltes JPEG ist nicht zwingend eine mechanische Abschlussbestätigung.
 
-Private Fotos und Projektdateien werden nicht mitgeliefert. Die Software ist keine offizielle KODAK-Anwendung.
+Es sind **keine Beispielbilder** enthalten. Private Fotos, lokale Projektdateien und Ausgabeprotokolle gehören nicht ins GitHub-Repository.
 
 Projekt: https://github.com/ManuelDeV-exe/kodak-P210R-Windows-Druck
-
-## Polaroid 1:1,6 – schmale Seitenränder
-
-Bei diesem Layout füllt das Foto die Breite fast vollständig aus (ca. 12–35 Pixel Rand je Seite). Der weiße Bereich für die Beschriftung bleibt unten erhalten. **1:1,6 bezeichnet dabei das Gesamtformat des 640 × 1024-Pixel-Ausdrucks**, nicht das Verhältnis der inneren Fotofläche. Die Druckroutine selbst ist unverändert.
