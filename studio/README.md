@@ -1,32 +1,37 @@
-# KODAK P210R Studio 1.1
+# KODAK P210R Studio 1.2
 
-Windows-App mit modernerer Tkinter-Oberfläche, lebendiger Druckanzeige, Foto-Vorschau, Stapelverarbeitung und anpassbaren Weißrand- und Polaroid-Layouts. **Der erfolgreich getestete Bluetooth-Treiber `driver/print_photo.py` ist unverändert aus V2.3 übernommen.**
+Lokale Windows-Anwendung mit Fotovorschau, Bildbearbeitung, Polaroid-Layouts und Druckwarteschlange für den KODAK Mini 2 Retro P210R. Der **nachweislich funktionierende V2.3-Bluetooth-Drucktreiber** (`driver/print_photo.py`) bleibt unverändert.
 
 ## Start
 
-1. ZIP entpacken, Drucker per Bluetooth verbinden (bisher COM5).
-2. `STARTEN.bat` ausführen (Python 3.10+ erforderlich). Oder `py -m pip install -r requirements.txt` und `py app.py`.
-3. Fotos/Ordner hinzufügen. Foto links auswählen und rechts bearbeiten.
-4. Druckstil auswählen: *Ohne Rahmen*, *Foto mit weißem Rand*, *Polaroid 1:1,2* oder *Polaroid 1:1,4*.
-5. Randbreite einstellen; bei Polaroids optional eine kurze Bildunterschrift eingeben. Die Vorschau zeigt das fertig gerenderte Bild.
-6. **Abreißstreifen:** Beim physischen Auswurf befindet sich der abtrennbare Streifen links. Die gestrichelte Markierung in der Vorschau kennzeichnet diese Seite, ist aber **nicht** Teil der Datei. Falls die Orientierung nicht passt, *Druckbild um 180° drehen* aktivieren; die Vorschau aktualisiert sich sofort.
-7. Kopienzahl, Bildkorrekturen und Reihenfolge einstellen. *Stapel drucken* ausführen.
+1. Bluetooth-Drucker in Windows koppeln und zugehörigen seriellen COM-Port ermitteln (im bisherigen Test COM5).
+2. ZIP vollständig entpacken und `STARTEN.bat` doppelklicken. Python 3.10+ benötigt. Alternativ `py -m pip install -r requirements.txt` und `py app.py`.
+3. Bilder über *Bilder hinzufügen* oder *Ordner hinzufügen* importieren.
+4. Foto auswählen, Drucklayout bearbeiten, Kopienzahl einstellen.
+5. Über das Kästchen **☑** in der Tabelle Fotos für den nächsten Stapeldruck einschließen bzw. abwählen. `Stapel drucken` sendet nur angehakte Fotos.
 
-## Layout-Logik
+## Neu in Version 1.2
 
-- P210R-Ausgabedateien haben immer **640 × 1024 Pixel**. Die Druckhardware und deren Position des Streifens werden durch die App nicht verändert.
-- Beim klassischen weißen Rand ist die Breite über den Schieberegler einstellbar.
-- Polaroid **1:1,2** und **1:1,4** bezeichnen das *Verhältnis Breite : Höhe der inneren Fotofläche*. Bei beiden Layouts wird unten weißer Platz für Text gelassen; beim 1:1,4-Layout mehr.
-- Mit *Füllen* wird die innere Bildfläche beschnitten; mit *Ganzes Bild* wird sie ohne Beschnitt eingepasst.
-- Polaroid-Text wird in den größeren unteren Rand geschrieben; je nach Windows-Font erfolgt eine handschriftähnliche oder normale Schriftdarstellung.
-- Hochformat-Ausrichtung und Weißräume sind Vorschau-Vorgaben, keine separate Papierauswahl.
+- **Maus-Zoom**: Mit dem Mausrad über der Bildvorschau vergrößern oder verkleinern (1× bis 8×). Bei vergrößertem Bild **linke Maustaste gedrückt halten und ziehen**, um den Ausschnitt zu verschieben. Das wird im Projekt gespeichert und wirklich auf das Druckbild angewandt.
+- **App-Icon**: Eigenes Kamera-Symbol im Fenster, ohne externe Grafikdatei oder ein Benutzerfoto.
+- **Schriftwahl**: `Standard` (wie bisher) sowie Segoe UI, Arial, Georgia, Times New Roman und Consolas. Fehlende Schriftdateien erhalten eine Ersatzschrift.
+- **Zurücksetzen**: `Bearbeitung zurücksetzen` stellt Bildbearbeitungsparameter, Zoom und Schrift auf Standard zurück.
+- **Abhakbare Warteschlange**: Auf das Häkchen in der ersten Tabellenspalte klicken. Deaktivierte Bilder werden nicht gedruckt.
+- **Projekte speichern/öffnen**: Projekt als `*.p210r.json` mit Reihenfolge, Kopienzahl, Bildern, Layouts, Bearbeitungen, Druckauswahl und COM-Port speichern; später wieder laden. **Die Projektdatei enthält Bildpfade, keine eingebetteten Bilder.** Wird sie mit den Bildern verschoben, müssen relative Pfade erhalten bleiben. Fehlende Bilder werden beim Laden gemeldet.
+- **EXIF-Datum**: Für Polaroids `EXIF-Datum` aktivieren. Die Anwendung nutzt das im Foto hinterlegte Aufnahme-/Digitalisierungsdatum (Format `TT.MM.JJJJ`). Fehlen Metadaten, bleibt der manuell eingegebene Text erhalten.
+- **KODAK-Link**: Schaltfläche `KODAK ↗` öffnet die Webseite des Foto-Drucker-Herstellers im Browser.
 
-## Sicherheit, Grenzen und Datenschutz
+## Formate und Bedienung
 
-- **Keine Beispielbilder im Repository oder ZIP.** Bei Tests werden Fotos nur lokal geladen und verarbeitet.
-- `.gitignore` schließt gängige Bildtypen, private Daten, Logs und den Ordner `output/` aus.
-- Bearbeitungen sind je Bild gespeichert; während eines Druckstapels sind neue Bearbeitungen nicht wirksam.
-- Bluetooth exklusiv verwenden, die originale KODAK-App geschlossen halten.
-- Ein erfolgreicher Schreibvorgang beweist nicht zwangsläufig einen abgeschlossenen Ausdruck. Stapeleinsätze unter Aufsicht testen und erst erweitern, wenn mehrere Ausgaben korrekt funktionieren.
-- Die animierte Fortschrittsanzeige zeigt *Aktivität*, **keinen verlässlichen Prozent-Fortschritt**.
-- Python-Tests: `py -m unittest discover -s tests -v`.
+- Druckdatei: **640 × 1024 Pixel**, unabhängig vom Layout. Der Abreißstreifen befindet sich bei der Ausgabe **links**. Die Markierung in der Vorschau wird nicht mitgedruckt.
+- Rahmen: ohne Rand, weißer Rand, Polaroid **1:1,2** oder **1:1,4**, jeweils mit einstellbarer Rahmenbreite bzw. Text.
+- `Füllen (Beschnitt)` vergrößert das Foto auf die Bildfläche; `Ganzes Bild` zeigt das komplette Motiv, solange kein zusätzlicher Mauszoom gesetzt ist.
+- **Stapelverarbeitung** über die bewährte Bluetooth-Seriellroutine. Die animierte Fortschrittsanzeige zeigt nur Aktivität, keinen exakt gemessenen Prozentfortschritt. Druckaufträge während der ersten Tests beaufsichtigen.
+- Bearbeitungen sind pro Bild gespeichert, während eines laufenden Stapels wird ein Snapshot verwendet.
+
+## Datenschutz und Tests
+
+- **Keine privaten Beispielbilder im Quellpaket oder auf GitHub.** `.gitignore` schließt Fotos, Ausgabedateien und lokale Projektdateien aus.
+- Lokale Projekte können private Dateipfade enthalten: nicht unbedacht veröffentlichen.
+- Tests: `py -m unittest discover -s tests -v` aus dem `studio`-Ordner.
+- Der Einzeldruck mit dem V2.3-Treiber wurde am Drucker bestätigt. Neue UI-Funktionen und längere Stapel sind vor Ort noch zu testen.
