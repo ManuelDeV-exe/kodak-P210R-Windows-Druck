@@ -13,7 +13,7 @@ POLL = bytes.fromhex('0300000000000000')
 WINDOW_PREFIX = bytes.fromhex('09000000')
 WINDOW = 32768
 
-PHASE_NAMES = {0xFF:'Vorbereitung', 0x05:'Gelb', 0x06:'Magenta', 0x00:'Cyan', 0x01:'Schutzschicht', 0x02:'Druck läuft (unbekannte Phase)', 0x03:'Abgeschlossen'}
+PHASE_NAMES = {0xFF:'Druckstart', 0x05:'Vorbereitung', 0x06:'Gelb', 0x00:'Magenta', 0x01:'Cyan', 0x02:'Schutzschicht', 0x03:'Abgeschlossen'}
 
 def decode_phase(packet):
     if len(packet)==16 and packet[:8]==bytes.fromhex('0403010100000008'):
