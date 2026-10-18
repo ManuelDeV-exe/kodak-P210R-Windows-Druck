@@ -908,10 +908,27 @@ class App:
             return messagebox.showinfo('Druck läuft','Kalibrierung erst nach Ende des Drucks starten.')
         win=tk.Toplevel(self.root)
         win.title('Druckkalibrierung · P210R Studio 1.8')
-        win.geometry('580x650');win.minsize(490,540)
+        win.geometry('600x650');win.minsize(480,420)
         win.transient(self.root)
         win.configure(bg=BG)
-        main=ttk.Frame(win,padding=20);main.pack(fill='both',expand=True)
+        # Scrolling ensures every calibration control is reachable at high DPI / display scaling.
+        outer=ttk.Frame(win)
+        outer.pack(fill='both',expand=True)
+        canvas=tk.Canvas(outer,bg=BG,highlightthickness=0,bd=0)
+        scrollbar=ttk.Scrollbar(outer,orient='vertical',command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right',fill='y')
+        canvas.pack(side='left',fill='both',expand=True)
+        main=ttk.Frame(canvas,padding=20)
+        canvas_frame=canvas.create_window((0,0),window=main,anchor='nw')
+        main.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(canvas_frame,width=event.width))
+        def wheel(event):
+            if event.delta:
+                canvas.yview_scroll(int(-event.delta/120) or (-1 if event.delta>0 else 1),'units')
+        canvas.bind('<Enter>',lambda e:canvas.bind_all('<MouseWheel>',wheel))
+        canvas.bind('<Leave>',lambda e:canvas.unbind_all('<MouseWheel>'))
+        win.bind('<Destroy>',lambda e:canvas.unbind_all('<MouseWheel>') if e.widget is win else None)
         ttk.Label(main,text='Druckkalibrierung',font=('Segoe UI',21,'bold')).pack(anchor='w')
         ttk.Label(main,text='1 · Testquadrat drucken  →  2 · Ränder messen  →  3 · Speichern',
                   style='Subtitle.TLabel').pack(anchor='w',pady=(2,13))
@@ -919,6 +936,9 @@ class App:
                   'Alle vier Abstände vom Papierrand bis zum schwarzen Quadrat in mm.\n'
                   'Die Korrektur verschiebt nur das Druckbild, nicht deine Bildvorschau.',
                   justify='left').pack(anchor='w',pady=(0,12))
+        # Main action belongs at the TOP, not below fields and the preview.
+        ttk.Button(main,text='TESTQUADRAT DRUCKEN',style='Primary.TButton',
+                   command=lambda:self._print_calibration_pattern(win)).pack(fill='x',pady=(0,12),ipady=7)
         image=calibration_pattern()
         thumb=image.copy();thumb.thumbnail((190,240))
         thumbtk=ImageTk.PhotoImage(thumb)
@@ -958,7 +978,6 @@ class App:
             except (ValueError,KeyError) as exc:
                 messagebox.showerror('Ungültige Messung',str(exc),parent=win)
         actions=ttk.Frame(main);actions.pack(fill='x',pady=(9,0))
-        ttk.Button(actions,text='Testquadrat drucken',style='Primary.TButton',command=lambda:self._print_calibration_pattern(win)).pack(fill='x',pady=(0,7))
         row2=ttk.Frame(actions);row2.pack(fill='x')
         ttk.Button(row2,text='Korrektur berechnen',command=calculate).pack(side='left')
         ttk.Button(row2,text='Korrektur speichern',command=lambda:calculate(True)).pack(side='left',padx=6)
