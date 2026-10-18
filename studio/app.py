@@ -30,35 +30,95 @@ class Photo:
     brightness: float = 1.0
     contrast: float = 1.0
     saturation: float = 1.0
+    layout: str = 'Foto mit weißem Rand'
+    caption: str = ''
+    border: int = 22
+    print_rotate: bool = False
     name: str = ''
     def __post_init__(self):
         self.name = self.path.name
 
 
+LAYOUTS = ('Ohne Rahmen', 'Foto mit weißem Rand', 'Polaroid 1:1,2', 'Polaroid 1:1,4')
+INK = '#233044'
+BG = '#eef2f7'
+ACCENT = '#4765e9'
+
+
 def prepare_image(item):
+    """Compose the finished 640x1024 JPEG; preserve proven v2.3 wire protocol."""
     with Image.open(item.path) as src:
         im = ImageOps.exif_transpose(src).convert('RGB')
     if item.rotate:
         im = im.rotate(-item.rotate, expand=True, resample=Image.Resampling.BICUBIC)
-    if item.fit == 'Füllen (Beschnitt)':
-        im = ImageOps.fit(im, SIZE, method=Image.Resampling.LANCZOS, centering=(.5, .5))
-    else:
-        im.thumbnail(SIZE, Image.Resampling.LANCZOS)
-        bg = Image.new('RGB', SIZE, 'white')
-        bg.paste(im, ((SIZE[0]-im.width)//2, (SIZE[1]-im.height)//2))
-        im = bg
-    for factor, cls in ((item.brightness, ImageEnhance.Brightness), (item.contrast, ImageEnhance.Contrast), (item.saturation, ImageEnhance.Color)):
+    for factor, cls in ((item.brightness, ImageEnhance.Brightness),
+                        (item.contrast, ImageEnhance.Contrast),
+                        (item.saturation, ImageEnhance.Color)):
         if factor != 1:
             im = cls(im).enhance(factor)
-    return im
+
+    canvas = Image.new('RGB', SIZE, 'white')
+    edge = max(0, min(110, int(item.border)))
+    if item.layout == 'Ohne Rahmen':
+        rect = (0, 0, SIZE[0], SIZE[1])
+    elif item.layout == 'Foto mit weißem Rand':
+        rect = (edge, edge, SIZE[0] - edge, SIZE[1] - edge)
+    else:
+        # Polaroid frame: caption stays below the image, no text over photograph.
+        top = max(18, edge)
+        bottom_space = 190 if item.layout == 'Polaroid 1:1,2' else 255
+        # The requested aspect ratio refers to photo inset, not the fixed paper.
+        # 1:1.2 or 1:1.4 means inset height = inset width * ratio.
+        ratio = 1.2 if item.layout == 'Polaroid 1:1,2' else 1.4
+        available_w = SIZE[0] - 2 * top
+        available_h = SIZE[1] - top - bottom_space
+        iw = min(available_w, int(available_h / ratio))
+        ih = round(iw * ratio)
+        x = (SIZE[0] - iw) // 2
+        rect = (x, top, x + iw, top + ih)
+    rw, rh = rect[2]-rect[0], rect[3]-rect[1]
+    if rw < 10 or rh < 10:
+        raise ValueError('Rand zu groß')
+    if item.fit == 'Füllen (Beschnitt)':
+        final = ImageOps.fit(im, (rw, rh), method=Image.Resampling.LANCZOS)
+    else:
+        final = ImageOps.contain(im, (rw, rh), method=Image.Resampling.LANCZOS)
+    x = rect[0] + (rw - final.width)//2
+    y = rect[1] + (rh - final.height)//2
+    canvas.paste(final, (x, y))
+    if item.layout.startswith('Polaroid') and item.caption.strip():
+        from PIL import ImageFont
+        font = None
+        for fontname in ('C:/Windows/Fonts/segoepr.ttf','C:/Windows/Fonts/segoesc.ttf',
+                         'C:/Windows/Fonts/segoeui.ttf','DejaVuSans.ttf'):
+            try:
+                font=ImageFont.truetype(fontname, 33)
+                break
+            except OSError:
+                pass
+        if font is None:
+            font=ImageFont.load_default()
+        draw=ImageDraw.Draw(canvas)
+        label=' '.join(item.caption.strip().split())
+        max_width=SIZE[0]-50
+        while len(label)>1 and draw.textbbox((0,0),label,font=font)[2]>max_width:
+            label=label[:-2]+'…'
+        textbb=draw.textbbox((0,0),label,font=font)
+        tw=textbb[2]-textbb[0]
+        bottom_start=rect[3]
+        text_y=bottom_start + max(8,(SIZE[1]-bottom_start-(textbb[3]-textbb[1]))//2) - textbb[1]
+        draw.text(((SIZE[0]-tw)//2,text_y),label,fill=INK,font=font)
+    if item.print_rotate:
+        canvas=canvas.rotate(180)
+    return canvas
 
 
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.0')
-        root.geometry('1210x780')
-        root.minsize(950, 620)
+        root.title('KODAK P210R Studio · 1.1')
+        root.geometry('1280x880')
+        root.minsize(1030, 740)
         self.items = []
         self.selected = None
         self.ui_messages = queue.Queue()
@@ -66,16 +126,30 @@ class App:
         self.cancel_flag = threading.Event()
         self.preview_photo = None
         self.refresh_after = None
+        root.configure(bg=BG)
+        self.anim_tick=0
         self._build()
         root.after(90, self._poll_ui)
+        root.after(110, self._animate)
         root.protocol('WM_DELETE_WINDOW', self._close)
 
     def _build(self):
         s = ttk.Style()
-        if 'vista' in s.theme_names(): s.theme_use('vista')
-        outer = ttk.Frame(self.root, padding=13); outer.pack(fill='both', expand=True)
+        s.theme_use('clam')
+        s.configure('TFrame',background=BG)
+        s.configure('TLabel',background=BG,foreground=INK,font=('Segoe UI',10))
+        s.configure('TLabelframe',background=BG,foreground=INK)
+        s.configure('TLabelframe.Label',background=BG,foreground=INK,font=('Segoe UI',10,'bold'))
+        s.configure('TButton',font=('Segoe UI',10),padding=(12,7),background='#ffffff',foreground=INK,borderwidth=0)
+        s.map('TButton',background=[('active','#dce4fa')])
+        s.configure('Primary.TButton',background=ACCENT,foreground='white',font=('Segoe UI',10,'bold'),padding=(16,9))
+        s.map('Primary.TButton',background=[('active','#3450bf'),('disabled','#b0b7c9')])
+        s.configure('Treeview',rowheight=34,background='white',fieldbackground='white',foreground=INK,font=('Segoe UI',10),borderwidth=0)
+        s.configure('Treeview.Heading',font=('Segoe UI',10,'bold'),background='#dee5f2',foreground=INK)
+        s.map('Treeview',background=[('selected','#cad5ff')],foreground=[('selected',INK)])
+        outer = ttk.Frame(self.root, padding=17); outer.pack(fill='both', expand=True)
         top = ttk.Frame(outer); top.pack(fill='x', pady=(0,10))
-        ttk.Label(top, text='KODAK P210R Studio', font=('Segoe UI',19,'bold')).pack(side='left')
+        ttk.Label(top, text='✦ KODAK P210R Studio', font=('Segoe UI',22,'bold')).pack(side='left')
         ttk.Label(top, text='  · Bluetooth-Fotodruck & Stapelverarbeitung', foreground='#666').pack(side='left')
         ttk.Button(top, text='Bilder hinzufügen', command=self.add_files).pack(side='right', padx=3)
         ttk.Button(top, text='Ordner hinzufügen', command=self.add_folder).pack(side='right', padx=3)
@@ -98,10 +172,33 @@ class App:
         self.log_widget = tk.Text(logbox,height=9,wrap='word',state='disabled',font=('Consolas',9))
         self.log_widget.pack(fill='both',expand=True)
         ttk.Label(right,text='Bildvorschau & Bearbeitung',font=('Segoe UI',12,'bold')).pack(anchor='w')
-        self.preview = tk.Canvas(right,bg='#25272b',highlightthickness=0,height=365)
+        self.preview = tk.Canvas(right,bg='#1d2739',highlightthickness=0,height=345)
         self.preview.pack(fill='both',expand=True,pady=8)
         self.preview.bind('<Configure>',lambda _:self._schedule_preview())
-        edit = ttk.LabelFrame(right,text='Ausgewähltes Foto',padding=10); edit.pack(fill='x')
+        self.tip_label=ttk.Label(right,text='◀  Abreißstreifen links beim Auswurf · nicht Teil des Druckbilds',foreground='#566783')
+        self.tip_label.pack(anchor='w',pady=(0,4))
+        edit = ttk.LabelFrame(right,text='Bild & Drucklayout',padding=10); edit.pack(fill='x')
+        layoutrow=ttk.Frame(edit);layoutrow.pack(fill='x',pady=(0,7))
+        ttk.Label(layoutrow,text='Druckstil:').pack(side='left',padx=(0,9))
+        self.layout_var=tk.StringVar(value='Foto mit weißem Rand')
+        layouts=ttk.Combobox(layoutrow,textvariable=self.layout_var,values=LAYOUTS,state='readonly',width=27)
+        layouts.pack(side='left',fill='x',expand=True)
+        layouts.bind('<<ComboboxSelected>>',lambda _:self._change('layout',self.layout_var.get()))
+        captionrow=ttk.Frame(edit);captionrow.pack(fill='x',pady=(0,7))
+        ttk.Label(captionrow,text='Polaroid-Text:').pack(side='left',padx=(0,8))
+        self.caption_var=tk.StringVar()
+        self.caption_entry=ttk.Entry(captionrow,textvariable=self.caption_var)
+        self.caption_entry.pack(side='left',fill='x',expand=True)
+        self.caption_var.trace_add('write',lambda *_:self._change('caption',self.caption_var.get()))
+        borderrow=ttk.Frame(edit);borderrow.pack(fill='x',pady=(0,7))
+        ttk.Label(borderrow,text='Weißer Rand:').pack(side='left',padx=(0,8))
+        self.border_var=tk.IntVar(value=22)
+        ttk.Scale(borderrow,from_=0,to=100,variable=self.border_var,command=lambda v:self._change('border',round(float(v)))).pack(side='left',fill='x',expand=True)
+        self.border_text=ttk.Label(borderrow,text='22 px',width=7)
+        self.border_text.pack(side='left',padx=6)
+        self.orientation_var=tk.BooleanVar(value=False)
+        ttk.Checkbutton(edit,text='Druckbild um 180° drehen (Abreißstreifen links)',variable=self.orientation_var,
+                        command=lambda:self._change('print_rotate',self.orientation_var.get())).pack(anchor='w',pady=(0,7))
         row1=ttk.Frame(edit);row1.pack(fill='x',pady=3)
         ttk.Button(row1,text='↻ 90°',command=lambda:self.rotate(90)).pack(side='left')
         ttk.Button(row1,text='↺ 90°',command=lambda:self.rotate(-90)).pack(side='left',padx=5)
@@ -132,8 +229,11 @@ class App:
         self.status=tk.StringVar(value='Bereit · Keine Fotos')
         ttk.Label(bottom,textvariable=self.status).pack(side='left',padx=10)
         self.stop_btn=ttk.Button(bottom,text='Nach aktuellem Foto stoppen',command=self.stop,state='disabled');self.stop_btn.pack(side='right',padx=4)
-        self.start_btn=ttk.Button(bottom,text='Stapel drucken',command=self.start);self.start_btn.pack(side='right',padx=4)
+        self.start_btn=ttk.Button(bottom,text='Stapel drucken',style='Primary.TButton',command=self.start);self.start_btn.pack(side='right',padx=4)
         ttk.Button(bottom,text='Vorschau-JPEG speichern',command=self.export).pack(side='right',padx=4)
+        self.progress=ttk.Progressbar(outer,mode='indeterminate',length=180)
+        self.progress.pack(fill='x',pady=(9,0))
+        self.progress['value']=0
         self._log('Druckroutine: unveränderte V2.3. Änderungen werden nur am vorbereiteten Foto vorgenommen.')
 
     def _log(self,msg):
@@ -166,6 +266,9 @@ class App:
         self.selected=selection[0];item=self._current()
         if item:
             self.fit_var.set(item.fit);self.copies_var.set(item.copies)
+            self.layout_var.set(item.layout);self.caption_var.set(item.caption)
+            self.border_var.set(item.border);self.border_text.configure(text=f'{item.border} px')
+            self.orientation_var.set(item.print_rotate)
             for attr,(v,lbl) in self.sliders.items():v.set(getattr(item,attr));lbl.configure(text=f'{int(round(getattr(item,attr)*100))} %')
             self._schedule_preview()
 
@@ -173,6 +276,7 @@ class App:
         if self.running:return
         item=self._current()
         if item:setattr(item,attr,value)
+        if attr=='border':self.border_text.configure(text=f'{value} px')
         if attr in self.sliders:self.sliders[attr][1].configure(text=f'{int(round(value*100))} %')
         self._schedule_preview()
 
@@ -194,6 +298,7 @@ class App:
         item=self._current()
         if item:
             item.rotate=0;item.fit='Füllen (Beschnitt)';item.brightness=item.contrast=item.saturation=1
+            item.layout='Foto mit weißem Rand';item.caption='';item.border=22;item.print_rotate=False
             self._select()
 
     def _schedule_preview(self):
@@ -210,7 +315,10 @@ class App:
             width=max(100,self.preview.winfo_width()-32);height=max(100,self.preview.winfo_height()-32)
             im.thumbnail((width,height),Image.Resampling.LANCZOS)
             self.preview_photo=ImageTk.PhotoImage(im)
-            self.preview.create_image(self.preview.winfo_width()//2,self.preview.winfo_height()//2,image=self.preview_photo)
+            cx=self.preview.winfo_width()//2;cy=self.preview.winfo_height()//2
+            self.preview.create_rectangle(cx-im.width//2-8,cy-im.height//2-8,cx+im.width//2+8,cy+im.height//2+8,fill='#152035',outline='')
+            self.preview.create_image(cx,cy,image=self.preview_photo)
+            self.preview.create_line(cx-im.width//2-17,cy-im.height//2,cx-im.width//2-17,cy+im.height//2,fill='#f4c271',width=3,dash=(5,4))
         except Exception as ex:self._log(f'Vorschaufehler: {ex}')
 
     def move(self,direction):
@@ -253,10 +361,11 @@ class App:
         if not port:return messagebox.showerror('Fehler','Bitte COM-Port eintragen.')
         if not DRIVER.exists():return messagebox.showerror('Fehler','V2.3 Druckroutine fehlt.')
         # Immutable snapshot; edits are disabled while running.
-        snapshot=[Photo(x.path,uid=x.uid,copies=x.copies,rotate=x.rotate,fit=x.fit,brightness=x.brightness,contrast=x.contrast,saturation=x.saturation) for x in self.items]
+        snapshot=[Photo(x.path,uid=x.uid,copies=x.copies,rotate=x.rotate,fit=x.fit,brightness=x.brightness,contrast=x.contrast,saturation=x.saturation,layout=x.layout,caption=x.caption,border=x.border,print_rotate=x.print_rotate) for x in self.items]
         self.running=True;self.cancel_flag.clear()
         self.start_btn.configure(state='disabled');self.stop_btn.configure(state='normal')
         self.status.set('Druck läuft …')
+        self.progress.start(12)
         threading.Thread(target=self._worker,args=(snapshot,port,self.poll_var.get()),daemon=True).start()
 
     def stop(self):
@@ -311,11 +420,21 @@ class App:
                 elif action=='finished':
                     success,failed,stopped,path=data
                     self.running=False;self.start_btn.configure(state='normal');self.stop_btn.configure(state='disabled')
+                    self.progress.stop();self.progress['value']=0
                     msg=f'{success} Übertragungen abgeschlossen, {failed} Fehler'+(' · Stapel gestoppt' if stopped else '')
                     self.status.set(msg);self._log(msg+' · Protokolle in '+path)
                     if failed:messagebox.showwarning('Druckstapel',msg+'\nDetails im Protokoll.')
         except queue.Empty:pass
         self.root.after(90,self._poll_ui)
+
+    def _animate(self):
+        # A subtle animated activity marker, only while a print is active.
+        self.anim_tick=(self.anim_tick+1)%4
+        if self.running:
+            self.tip_label.configure(text='◀  Abreißstreifen links beim Auswurf  '+'·'*self.anim_tick)
+        else:
+            self.tip_label.configure(text='◀  Abreißstreifen links beim Auswurf · nicht Teil des Druckbilds')
+        self.root.after(280,self._animate)
 
     def _close(self):
         if self.running:
