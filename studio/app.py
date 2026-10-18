@@ -49,7 +49,7 @@ class Photo:
         self.name = self.path.name
 
 
-LAYOUTS = ('Ohne Rahmen', 'Foto mit weißem Rand', 'Polaroid 1:1,2', 'Polaroid 1:1,4')
+LAYOUTS = ('Ohne Rahmen', 'Foto mit weißem Rand', 'Polaroid 1:1,2', 'Polaroid 1:1,4', 'Polaroid 1:1,6')
 INK = '#233044'
 BG = '#eef2f7'
 ACCENT = '#4765e9'
@@ -145,8 +145,8 @@ def load_project_items(payload, project_path):
 
 
 
-def prepare_image(item):
-    """Compose the finished 640x1024 JPEG; preserve proven v2.3 wire protocol."""
+def prepare_image(item, for_print=False):
+    """Render upright preview; rotate Polaroids for physical print output."""
     with Image.open(item.path) as src:
         im = ImageOps.exif_transpose(src).convert('RGB')
     if item.rotate:
@@ -166,10 +166,10 @@ def prepare_image(item):
     else:
         # Polaroid frame: caption stays below the image, no text over photograph.
         top = max(18, edge)
-        bottom_space = 190 if item.layout == 'Polaroid 1:1,2' else 255
+        bottom_space = {'Polaroid 1:1,2': 190, 'Polaroid 1:1,4': 255, 'Polaroid 1:1,6': 320}.get(item.layout, 255)
         # The requested aspect ratio refers to photo inset, not the fixed paper.
         # 1:1.2 or 1:1.4 means inset height = inset width * ratio.
-        ratio = 1.2 if item.layout == 'Polaroid 1:1,2' else 1.4
+        ratio = {'Polaroid 1:1,2': 1.2, 'Polaroid 1:1,4': 1.4, 'Polaroid 1:1,6': 1.6}.get(item.layout, 1.4)
         available_w = SIZE[0] - 2 * top
         available_h = SIZE[1] - top - bottom_space
         iw = min(available_w, int(available_h / ratio))
@@ -196,15 +196,17 @@ def prepare_image(item):
         bottom_start=rect[3]
         text_y=bottom_start + max(8,(SIZE[1]-bottom_start-(textbb[3]-textbb[1]))//2) - textbb[1]
         draw.text(((SIZE[0]-tw)//2,text_y),label,fill=INK,font=font)
-    if item.print_rotate:
-        canvas=canvas.rotate(180)
+    if for_print and (item.layout.startswith('Polaroid') != bool(item.print_rotate)):
+        canvas = canvas.rotate(180)
+    elif for_print and item.print_rotate and not item.layout.startswith('Polaroid'):
+        canvas = canvas.rotate(180)
     return canvas
 
 
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('KODAK P210R Studio · 1.2')
+        root.title('KODAK P210R Studio · 1.3')
         self.icon_image = ImageTk.PhotoImage(make_icon())
         root.iconphoto(True, self.icon_image)
         root.geometry('1280x880')
@@ -309,7 +311,7 @@ class App:
         self.border_text=ttk.Label(borderrow,text='22 px',width=7)
         self.border_text.pack(side='left',padx=6)
         self.orientation_var=tk.BooleanVar(value=False)
-        ttk.Checkbutton(edit,text='Druckbild um 180° drehen (Abreißstreifen links)',variable=self.orientation_var,
+        ttk.Checkbutton(edit,text='Druckausrichtung umkehren (Polaroid wird automatisch korrigiert)',variable=self.orientation_var,
                         command=lambda:self._change('print_rotate',self.orientation_var.get())).pack(anchor='w',pady=(0,7))
         row1=ttk.Frame(edit);row1.pack(fill='x',pady=3)
         ttk.Button(row1,text='↻ 90°',command=lambda:self.rotate(90)).pack(side='left')
@@ -531,7 +533,7 @@ class App:
         if not item:return messagebox.showinfo('Info','Bitte zuerst ein Bild auswählen.')
         path=filedialog.asksaveasfilename(defaultextension='.jpg',filetypes=[('JPEG','*.jpg')],initialfile=item.path.stem+'_p210r.jpg')
         if path:
-            try:prepare_image(item).save(path,'JPEG',quality=94,subsampling=0)
+            try:prepare_image(item,for_print=True).save(path,'JPEG',quality=94,subsampling=0)
             except Exception as ex:messagebox.showerror('Fehler',str(ex))
             else:self._log(f'Bild gespeichert: {path}')
 
@@ -564,7 +566,7 @@ class App:
             self.ui_messages.put(('tree',(item.uid,'Druck läuft')))
             target=work/f'{index:04d}_{item.uid}.jpg';report=work/f'{index:04d}_{item.uid}.json'
             try:
-                prepare_image(item).save(target,'JPEG',quality=94,subsampling=0,optimize=False)
+                prepare_image(item,for_print=True).save(target,'JPEG',quality=94,subsampling=0,optimize=False)
                 args=[sys.executable,str(DRIVER),'--send','--port',port,'--image',str(target),'--report',str(report)]
                 if poll:args.append('--poll')
                 self.ui_messages.put(('log',f'{index}/{len(jobs)} → {item.name}, Kopie {copy_num}/{item.copies}'))
