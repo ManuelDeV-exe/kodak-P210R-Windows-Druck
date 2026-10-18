@@ -8,7 +8,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Desktop-0078D4?logo=windows&logoColor=white)
-![Studio](https://img.shields.io/badge/Studio-1.1-6e7be8)
+![Studio](https://img.shields.io/badge/Studio-1.2-6e7be8)
 ![Drucktreiber](https://img.shields.io/badge/Bluetooth--Druck-V2.3%20erfolgreich-2b9348)
 
 </div>
@@ -32,7 +32,7 @@ Die eigentliche Bluetooth-Druckroutine wurde aus einer eigenen Protokollaufzeich
 
 Die Formate **1:1,2 und 1:1,4** beziehen sich auf das Verhältnis **Breite : Höhe der inneren Fotofläche**. Das physische Papierformat bleibt unverändert. Die Druckbilder werden auf **640 × 1024 Pixel** vorbereitet.
 
-## Funktionen in Studio 1.1
+## Funktionen in Studio 1.2
 
 - Bilder einzeln oder aus ganzen Ordnern importieren.
 - Bildvorschau mit unmittelbarer Anzeige der Bearbeitungen.
@@ -113,20 +113,18 @@ py -m unittest discover -s tests -v
 
 **Stand:** Der Bluetooth-Einzeldruck mit V2.3 ist erfolgreich erprobt; für alle neuen Layoutvarianten und lange Stapel steht der vollständige Hardwaretest noch aus.
 
-## Geplante Erweiterungen
+## Neu in Studio 1.2
 
-Die folgenden Funktionen sind **gewünscht, aber noch nicht Bestandteil von Studio 1.1**:
+- **Mit der Maus zoomen und verschieben:** Mausrad in der Vorschau und Ziehen mit linker Maustaste. Der Bildausschnitt wird mitgedruckt.
+- **Eigenes App-Icon:** Kamerasymbol im Windows-Fenster.
+- **Schriftwahl für Polaroids:** Standard bleibt vorausgewählt; zusätzlich Segoe UI, Arial, Georgia, Times New Roman und Consolas.
+- **Bearbeitung zurücksetzen:** Fotoeinstellungen einschließlich Zoom, Layout, Beschriftung und Schriftauswahl zurücksetzen.
+- **Abhakbare Warteschlange:** Jedes Foto einzeln vom nächsten Stapeldruck ausschließen.
+- **Projektdateien:** Bildreihenfolge, Einstellungen, Kopien, Druckauswahl und COM-Port in `*.p210r.json` speichern und laden. Projekte enthalten **nur Verweise auf Bilddateien**, nicht die Bilder selbst.
+- **EXIF-Datum:** Aufnahmedatum automatisch als Polaroid-Beschriftung übernehmen; ohne Metadaten bleibt der manuelle Text.
+- **KODAK-Link:** Herstellerwebseite aus der Anwendung öffnen.
 
-- Bild mit der Maus zoomen und innerhalb des Ausschnitts verschieben.
-- Eigenes Anwendungsicon.
-- Schriftart für Polaroid-Unterschriften auswählen (mit unveränderter Standardschrift als Vorgabe).
-- Schaltfläche zum Zurücksetzen aller Bildbearbeitungen.
-- Abhakbare Elemente in der Warteschlange.
-- Projekte mit Bildern, Einstellungen und Druckstapeln speichern und später wieder öffnen.
-- Aufnahmedatum aus EXIF-Metadaten automatisch in Polaroid-Beschriftungen übernehmen.
-- Link zur offiziellen KODAK-Seite in der Anwendung.
-
-Diese Punkte werden in einer folgenden Studio-Version umgesetzt und nicht als bereits verfügbar ausgegeben.
+Die V2.3-Bluetooth-Druckroutine bleibt unverändert. Acht Offline-Tests wurden erfolgreich ausgeführt; die neue Oberfläche und längere Druckstapel sind noch am Gerät zu testen.
 
 ## Datenschutz
 
