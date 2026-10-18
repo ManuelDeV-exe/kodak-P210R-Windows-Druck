@@ -1,0 +1,67 @@
+name: Publish P210R Studio v1.5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-studio-v1-5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build clean ZIP without personal photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/kodak_p210r_studio_v1_5/driver package/kodak_p210r_studio_v1_5/tests
+          cp studio/app.py studio/README.md studio/requirements.txt studio/STARTEN.bat package/kodak_p210r_studio_v1_5/
+          cp studio/driver/print_photo.py package/kodak_p210r_studio_v1_5/driver/
+          cp studio/tests/test_*.py package/kodak_p210r_studio_v1_5/tests/
+          cd package
+          zip -r ../kodak_p210r_studio_v1_5.zip kodak_p210r_studio_v1_5/
+          cd ..
+          if unzip -Z1 kodak_p210r_studio_v1_5.zip | grep -Eiq '\\.(jpg|jpeg|png|gif|webp|heic|bmp|tif|tiff|json|log)$'; then
+            echo 'Unexpected image/log/project data in archive'
+            exit 1
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          ## KODAK P210R Studio 1.5
+
+          Das P210R Studio ist eine unabhängige Windows-Anwendung, um Fotos zu bearbeiten, Polaroid-Layouts zu gestalten und über Bluetooth zu drucken.
+
+          **Neu in 1.5**
+          - Zwei Feinregler mit +/- Tasten für die genaue Bildposition
+          - Eigenes Druckfenster mit farbiger Animation der gemeldeten Druckphasen
+          - Überarbeitete, übersichtlichere Oberfläche
+
+          **Außerdem enthalten**
+          - Rahmen- und Polaroid-Layouts (1:1,2, 1:1,4 und 1:1,6)
+          - Erweiterte Bildbearbeitung, Projektdateien und Druckwarteschlange
+          - Bluetooth-Druck über die auf dem P210R erprobte Python-Routine
+
+          **Installation:** ZIP herunterladen, entpacken und unter Windows `STARTEN.bat` ausführen. Python 3.10+ wird benötigt.
+
+          Das Projekt wurde mit KI-Unterstützung (*vibe-coded*) entwickelt. Die Druck-Animation ist eine Visualisierung, keine gemessene Druckgeschwindigkeit. Das Projekt ist keine offizielle KODAK-Software.
+
+          **Datenschutz:** Das Release enthält keine Beispielbilder oder privaten Druckprotokolle.
+          EOF
+          gh release create v1.5.0 kodak_p210r_studio_v1_5.zip \
+            --title 'KODAK P210R Studio v1.5.0' \
+            --notes-file release-notes.md \
+            --target "${GITHUB_SHA}" \
+            --latest
