@@ -1,4 +1,4 @@
-# KODAK P210R Studio 1.3
+# KODAK P210R Studio 1.4
 
 Lokale Windows-Anwendung mit Fotovorschau, Bildbearbeitung, Polaroid-Layouts und Druckwarteschlange für den KODAK Mini 2 Retro P210R. Der **nachweislich funktionierende V2.3-Bluetooth-Drucktreiber** (`driver/print_photo.py`) bleibt unverändert.
 
@@ -23,7 +23,7 @@ Lokale Windows-Anwendung mit Fotovorschau, Bildbearbeitung, Polaroid-Layouts und
 
 ## Formate und Bedienung
 
-- Druckdatei: **640 × 1024 Pixel**, unabhängig vom Layout. Der Abreißstreifen befindet sich bei der Ausgabe **links**. Die Markierung in der Vorschau wird nicht mitgedruckt.
+- Druckdatei: **640 × 1024 Pixel**, unabhängig vom Layout. Der Abreißstreifen befindet sich bei der Ausgabe **an der kurzen Seite**. Die Markierung in der Vorschau wird nicht mitgedruckt.
 - Rahmen: ohne Rand, weißer Rand, Polaroid **1:1,2**, **1:1,4** oder **1:1,6**, jeweils mit einstellbarer Rahmenbreite bzw. Text.
 - `Füllen (Beschnitt)` vergrößert das Foto auf die Bildfläche; `Ganzes Bild` zeigt das komplette Motiv, solange kein zusätzlicher Mauszoom gesetzt ist.
 - **Stapelverarbeitung** über die bewährte Bluetooth-Seriellroutine. Die animierte Fortschrittsanzeige zeigt nur Aktivität, keinen exakt gemessenen Prozentfortschritt. Druckaufträge während der ersten Tests beaufsichtigen.
@@ -43,3 +43,20 @@ Lokale Windows-Anwendung mit Fotovorschau, Bildbearbeitung, Polaroid-Layouts und
 - **Druckausrichtung umkehren** überschreibt die automatische Drehrichtung, falls bei anderer Geräteausrichtung erforderlich. Die Vorschau bleibt dabei immer aufrecht.
 - Der unveränderte V2.3-Treiber wird verwendet; die Korrektur erfolgt ausschließlich am JPEG vor dem Drucken.
 - Achtung: Drehrichtung aufgrund des Anwenderfeedbacks korrigiert, mit einem Probedruck zu verifizieren.
+
+## Neuerungen in Version 1.4
+
+- **Weitere Bearbeitung:** separater Dialog mit Live-Vorschau, Vorher/Nachher-Vergleich und Reglern für Belichtung, Lichter, Tiefen, Farbtemperatur und Schärfe. Die Effekte sind Lightroom-inspiriert, jedoch eigene vereinfachte Bildberechnungen.
+- **Hilfe & Links:** KODAK-Webseite, GitHub-Repository und GitHub-Anleitung unter einem Menü oben rechts. Der bisherige KODAK-Knopf bei den Schrifteinstellungen entfällt.
+- **Abreißstreifen:** Markierung unten an der kurzen Seite der hochformatigen Druckvorschau. Es ist nur eine grafische Hilfe, kein Bestandteil des JPEG.
+- **Zurücksetzen:** setzt alle Einstellungen des ausgewählten Bilds einschließlich Kopienzahl, Druckhaken und erweiterter Korrekturen auf Standard zurück.
+- **Verschieben ohne Zoom:** Die Mausverschiebung funktioniert auch bei Faktor 1,0; bei Bedarf wird geringfügig in das Bild hineingeschnitten, damit ein sichtbarer Versatz möglich ist.
+- **Bild zentrieren:** setzt die Verschiebung auf null.
+
+Der unveränderte Drucktreiber V2.3 ist weiterhin unter `driver/print_photo.py` enthalten.
+
+## Druckphasen in Studio 1.4
+
+Mit aktivierten Statusabfragen (Vorgabe) zeigt Studio erkannte Live-Phasen aus den tatsächlichen Bluetooth-Antworten: `FF` Vorbereitung, `05` Gelb, `06` Magenta, `00` Cyan, `01` Schutzschicht, `02` unbekannt, `03` abgeschlossen. Die Bezeichnungen folgen den Beobachtungen am Gerät und sind noch nicht durch Herstellerprotokolle bestätigt. Ein separater `04 06` Abschlussmarker wird ebenfalls erkannt. Statusabfragen können abgeschaltet werden. Keine künstliche Fortschrittsprozent-Anzeige.
+
+Die serielle Übertragungsroutine des bewährten V2.3-Treibers bleibt in ihren Datenpaketen unverändert; ergänzt wurde allein die passive Status-Dekodierung und ihre Ausgabe für die Studio-Oberfläche.
